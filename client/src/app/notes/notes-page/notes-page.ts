@@ -1,5 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, inject, OnInit, signal } from '@angular/core';
+import {
+  afterNextRender,
+  Component,
+  ElementRef,
+  inject,
+  Injector,
+  OnInit,
+  signal,
+  ViewChild,
+} from '@angular/core';
 import { RouterLink } from '@angular/router';
 import {
   LucideArchive,
@@ -42,6 +51,7 @@ interface NoteOperationError {
   template: `
     <main class="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 sm:py-12">
       <section class="mx-auto max-w-5xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <div [attr.inert]="notaParaExcluir() ? '' : null">
         <header class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex items-start gap-3">
             <span class="mt-1 rounded-xl bg-indigo-50 p-3 text-indigo-700">
@@ -49,7 +59,7 @@ interface NoteOperationError {
             </span>
             <div>
               <p class="text-sm font-semibold tracking-wide text-indigo-600">NoteKeeper</p>
-              <h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-900">Notas</h1>
+              <h1 #pageTitle tabindex="-1" class="mt-1 text-3xl font-bold tracking-tight text-slate-900 focus-visible:outline-2 focus-visible:outline-indigo-600">Notas</h1>
               <p class="mt-2 text-slate-600">Acompanhe suas notas e categorias.</p>
             </div>
           </div>
@@ -181,7 +191,6 @@ interface NoteOperationError {
               <ul
                 class="grid gap-4 md:grid-cols-2"
                 aria-label="Lista de notas"
-                [attr.inert]="notaParaExcluir() ? '' : null"
               >
                 @for (nota of notas(); track nota.id) {
                   <li class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -244,7 +253,7 @@ interface NoteOperationError {
                     </button>
                     <button
                       type="button"
-                      (click)="solicitarExclusao(nota)"
+                      (click)="solicitarExclusao(nota, $event)"
                       [disabled]="acoesBloqueadas()"
                       [attr.aria-label]="'Excluir nota ' + nota.titulo"
                       class="ml-2 mt-4 inline-flex items-center gap-2 rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -279,6 +288,7 @@ interface NoteOperationError {
             {{ mensagem }}
           </p>
         }
+        </div>
 
         @if (notaParaExcluir(); as nota) {
           <div
@@ -291,7 +301,10 @@ interface NoteOperationError {
               aria-labelledby="delete-note-title"
               aria-describedby="delete-note-description delete-note-warning"
               [attr.aria-busy]="excluindoId() !== null"
+              tabindex="-1"
+              #confirmDialog
               class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+              (keydown)="manterFocoNoDialogo($event)"
               (click)="$event.stopPropagation()"
             >
               <h2 id="delete-note-title" class="text-xl font-bold text-slate-900">
@@ -314,6 +327,7 @@ interface NoteOperationError {
                 <button
                   type="button"
                   [disabled]="excluindoId() !== null"
+                  #cancelButton
                   (click)="cancelarExclusao()"
                   class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -346,6 +360,11 @@ interface NoteOperationError {
 export class NotesPage implements OnInit {
   private readonly notesApi = inject(NotesApiService);
   private readonly categoriesApi = inject(CategoriesApiService);
+  private readonly injector = inject(Injector);
+  @ViewChild('pageTitle') private pageTitle?: ElementRef<HTMLHeadingElement>;
+  @ViewChild('confirmDialog') private confirmDialog?: ElementRef<HTMLElement>;
+  @ViewChild('cancelButton') private cancelButton?: ElementRef<HTMLButtonElement>;
+  private deleteTrigger: HTMLButtonElement | null = null;
   private notesRequestVersion = 0;
 
   protected readonly notas = signal<NotaDto[]>([]);
@@ -442,14 +461,18 @@ export class NotesPage implements OnInit {
       || this.notasEmProcessamento().size > 0;
   }
 
-  protected solicitarExclusao(nota: NotaDto): void {
+  protected solicitarExclusao(nota: NotaDto, event: MouseEvent): void {
     if (this.acoesBloqueadas()) {
       return;
     }
 
+    this.deleteTrigger = event.currentTarget instanceof HTMLButtonElement
+      ? event.currentTarget
+      : null;
     this.erroExclusao.set(null);
     this.mensagemStatus.set(null);
     this.notaParaExcluir.set(nota);
+    this.focarDepoisDaRenderizacao(() => this.cancelButton?.nativeElement.focus());
   }
 
   protected fecharConfirmacao(event: MouseEvent): void {
@@ -465,6 +488,49 @@ export class NotesPage implements OnInit {
 
     this.notaParaExcluir.set(null);
     this.erroExclusao.set(null);
+    this.restaurarFocoAoAcionador();
+  }
+
+  protected manterFocoNoDialogo(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.cancelarExclusao();
+      return;
+    }
+
+    if (event.key !== 'Tab') {
+      return;
+    }
+
+    const dialog = this.confirmDialog?.nativeElement;
+    if (!dialog) {
+      return;
+    }
+
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    );
+    if (focusable.length === 0) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if (!dialog.contains(active)) {
+      event.preventDefault();
+      first.focus();
+    } else if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   protected confirmarExclusao(): void {
@@ -475,12 +541,14 @@ export class NotesPage implements OnInit {
 
     this.erroExclusao.set(null);
     this.excluindoId.set(nota.id);
+    this.focarDepoisDaRenderizacao(() => this.confirmDialog?.nativeElement.focus());
     this.notesApi.excluir(nota.id).subscribe({
       next: () => {
         this.notaParaExcluir.set(null);
         this.removerNota(nota.id);
         this.mensagemStatus.set(`A nota "${nota.titulo}" foi excluída.`);
         this.excluindoId.set(null);
+        this.focarTituloDaPagina();
       },
       error: (error: unknown) => {
         this.excluindoId.set(null);
@@ -490,6 +558,7 @@ export class NotesPage implements OnInit {
           this.mensagemStatus.set(
             `A nota "${nota.titulo}" não está mais disponível. A lista foi atualizada.`,
           );
+          this.focarTituloDaPagina();
           return;
         }
 
@@ -498,8 +567,27 @@ export class NotesPage implements OnInit {
             ? 'Não foi possível excluir a nota. Verifique sua conexão e tente novamente.'
             : 'Ocorreu um erro ao excluir a nota. Tente novamente.',
         );
+        this.focarDepoisDaRenderizacao(() => this.cancelButton?.nativeElement.focus());
       },
     });
+  }
+
+  private restaurarFocoAoAcionador(): void {
+    this.focarDepoisDaRenderizacao(() => {
+      if (this.deleteTrigger?.isConnected) {
+        this.deleteTrigger.focus();
+      } else {
+        this.focarTituloDaPagina();
+      }
+    });
+  }
+
+  private focarTituloDaPagina(): void {
+    this.focarDepoisDaRenderizacao(() => this.pageTitle?.nativeElement.focus());
+  }
+
+  private focarDepoisDaRenderizacao(callback: () => void): void {
+    afterNextRender(callback, { injector: this.injector });
   }
 
   private removerNota(id: string): void {

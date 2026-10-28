@@ -1,4 +1,13 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import {
+  afterNextRender,
+  Component,
+  ElementRef,
+  inject,
+  Injector,
+  OnInit,
+  signal,
+  ViewChild,
+} from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { RouterLink } from '@angular/router';
 import {
@@ -31,6 +40,7 @@ type CategoriesPageState = 'loading' | 'loaded' | 'empty' | 'error';
   template: `
     <main class="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 sm:py-12">
       <section class="mx-auto max-w-4xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+        <div [attr.inert]="categoriaParaExcluir() ? '' : null">
         <header class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex items-start gap-3">
             <span class="mt-1 rounded-xl bg-indigo-50 p-3 text-indigo-700">
@@ -38,7 +48,7 @@ type CategoriesPageState = 'loading' | 'loaded' | 'empty' | 'error';
             </span>
             <div>
               <p class="text-sm font-semibold tracking-wide text-indigo-600">NoteKeeper</p>
-              <h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-900">Categorias</h1>
+              <h1 #pageTitle tabindex="-1" class="mt-1 text-3xl font-bold tracking-tight text-slate-900 focus-visible:outline-2 focus-visible:outline-indigo-600">Categorias</h1>
               <p class="mt-2 text-slate-600">Organize suas notas por categoria.</p>
             </div>
           </div>
@@ -111,7 +121,7 @@ type CategoriesPageState = 'loading' | 'loaded' | 'empty' | 'error';
                       type="button"
                       [disabled]="excluindoId() !== null"
                       [attr.aria-label]="'Excluir categoria ' + categoria.titulo"
-                      (click)="solicitarExclusao(categoria)"
+                      (click)="solicitarExclusao(categoria, $event)"
                       class="inline-flex shrink-0 items-center gap-2 rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <svg lucideTrash2 aria-hidden="true" class="size-4"></svg>
@@ -123,6 +133,7 @@ type CategoriesPageState = 'loading' | 'loaded' | 'empty' | 'error';
             }
           }
         </section>
+        </div>
 
         @if (categoriaParaExcluir(); as categoria) {
           <div
@@ -134,7 +145,10 @@ type CategoriesPageState = 'loading' | 'loaded' | 'empty' | 'error';
               aria-modal="true"
               aria-labelledby="delete-category-title"
               aria-describedby="delete-category-description delete-category-note"
+              tabindex="-1"
+              #confirmDialog
               class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+              (keydown)="manterFocoNoDialogo($event)"
               (click)="$event.stopPropagation()"
             >
               <h2 id="delete-category-title" class="text-xl font-bold text-slate-900">
@@ -157,6 +171,7 @@ type CategoriesPageState = 'loading' | 'loaded' | 'empty' | 'error';
                 <button
                   type="button"
                   [disabled]="excluindoId() !== null"
+                  #cancelButton
                   (click)="cancelarExclusao()"
                   class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -188,6 +203,11 @@ type CategoriesPageState = 'loading' | 'loaded' | 'empty' | 'error';
 })
 export class CategoriesPage implements OnInit {
   private readonly categoriesApi = inject(CategoriesApiService);
+  private readonly injector = inject(Injector);
+  @ViewChild('pageTitle') private pageTitle?: ElementRef<HTMLHeadingElement>;
+  @ViewChild('confirmDialog') private confirmDialog?: ElementRef<HTMLElement>;
+  @ViewChild('cancelButton') private cancelButton?: ElementRef<HTMLButtonElement>;
+  private deleteTrigger: HTMLButtonElement | null = null;
 
   protected readonly categorias = signal<CategoriaDto[]>([]);
   protected readonly estado = signal<CategoriesPageState>('loading');
@@ -213,14 +233,18 @@ export class CategoriesPage implements OnInit {
     });
   }
 
-  protected solicitarExclusao(categoria: CategoriaDto): void {
+  protected solicitarExclusao(categoria: CategoriaDto, event: MouseEvent): void {
     if (this.excluindoId() !== null) {
       return;
     }
 
+    this.deleteTrigger = event.currentTarget instanceof HTMLButtonElement
+      ? event.currentTarget
+      : null;
     this.erroExclusao.set(null);
     this.mensagemStatus.set(null);
     this.categoriaParaExcluir.set(categoria);
+    this.focarDepoisDaRenderizacao(() => this.cancelButton?.nativeElement.focus());
   }
 
   protected fecharConfirmacao(event: MouseEvent): void {
@@ -236,6 +260,49 @@ export class CategoriesPage implements OnInit {
 
     this.categoriaParaExcluir.set(null);
     this.erroExclusao.set(null);
+    this.restaurarFocoAoAcionador();
+  }
+
+  protected manterFocoNoDialogo(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.cancelarExclusao();
+      return;
+    }
+
+    if (event.key !== 'Tab') {
+      return;
+    }
+
+    const dialog = this.confirmDialog?.nativeElement;
+    if (!dialog) {
+      return;
+    }
+
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    );
+    if (focusable.length === 0) {
+      event.preventDefault();
+      dialog.focus();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    const active = document.activeElement;
+    if (!dialog.contains(active)) {
+      event.preventDefault();
+      first.focus();
+    } else if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
   }
 
   protected confirmarExclusao(): void {
@@ -246,6 +313,7 @@ export class CategoriesPage implements OnInit {
 
     this.erroExclusao.set(null);
     this.excluindoId.set(categoria.id);
+    this.focarDepoisDaRenderizacao(() => this.confirmDialog?.nativeElement.focus());
     this.categoriesApi
       .excluir(categoria.id)
       .pipe(finalize(() => this.excluindoId.set(null)))
@@ -253,20 +321,41 @@ export class CategoriesPage implements OnInit {
         next: () => {
           this.categoriaParaExcluir.set(null);
           this.removerCategoria(categoria.id);
+          this.focarTituloDaPagina();
         },
         error: (error: unknown) => {
           if (error instanceof HttpErrorResponse && error.status === 404) {
             this.categoriaParaExcluir.set(null);
             this.removerCategoria(categoria.id);
             this.mensagemStatus.set('A categoria não foi encontrada ou já havia sido removida. A lista foi atualizada.');
+            this.focarTituloDaPagina();
             return;
           }
 
           this.erroExclusao.set(
             'Não foi possível excluir a categoria. Verifique sua conexão e tente novamente.',
           );
+          this.focarDepoisDaRenderizacao(() => this.cancelButton?.nativeElement.focus());
         },
       });
+  }
+
+  private restaurarFocoAoAcionador(): void {
+    this.focarDepoisDaRenderizacao(() => {
+      if (this.deleteTrigger?.isConnected) {
+        this.deleteTrigger.focus();
+      } else {
+        this.focarTituloDaPagina();
+      }
+    });
+  }
+
+  private focarTituloDaPagina(): void {
+    this.focarDepoisDaRenderizacao(() => this.pageTitle?.nativeElement.focus());
+  }
+
+  private focarDepoisDaRenderizacao(callback: () => void): void {
+    afterNextRender(callback, { injector: this.injector });
   }
 
   private removerCategoria(id: string): void {

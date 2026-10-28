@@ -479,6 +479,7 @@ describe('NotesPage', () => {
     harness.detectChanges();
 
     const dialog = harness.routeNativeElement?.querySelector('[role="alertdialog"]');
+    const cancelButton = dialog?.querySelector<HTMLButtonElement>('button:first-child');
     expect(dialog?.getAttribute('aria-modal')).toBe('true');
     expect(dialog?.getAttribute('aria-labelledby')).toBe('delete-note-title');
     expect(dialog?.getAttribute('aria-describedby')).toBe(
@@ -487,17 +488,67 @@ describe('NotesPage', () => {
     expect(dialog?.textContent).toContain('Nota de trabalho');
     expect(dialog?.textContent).toContain('Esta ação é definitiva');
     expect(dialog?.textContent).toContain('nota e todas as suas associações com categorias');
-    expect(
-      harness.routeNativeElement?.querySelector('[aria-label="Lista de notas"]')?.hasAttribute('inert'),
-    ).toBe(true);
+    expect(document.activeElement).toBe(cancelButton);
+    expect(harness.routeNativeElement?.querySelector('section > div')?.hasAttribute('inert')).toBe(
+      true,
+    );
 
-    dialog?.querySelector<HTMLButtonElement>('button')?.click();
+    cancelButton?.click();
     harness.detectChanges();
 
     expect(harness.routeNativeElement?.querySelector('[role="alertdialog"]')).toBeNull();
     expect(harness.routeNativeElement?.textContent).toContain('Nota pessoal');
     expect(harness.routeNativeElement?.textContent).toContain('Nota de trabalho');
+    expect(document.activeElement).toBe(
+      harness.routeNativeElement?.querySelector<HTMLButtonElement>(
+        'button[aria-label="Excluir nota Nota de trabalho"]',
+      ),
+    );
     httpTesting.expectNone('http://localhost:5146/notas/second-id');
+  });
+
+  it('keeps Tab and Shift+Tab navigation inside the note confirmation', async () => {
+    const harness = await RouterTestingHarness.create();
+    await abrirNotas(harness);
+    httpTesting.expectOne('http://localhost:5146/notas').flush([
+      {
+        id: 'note-id',
+        titulo: 'Nota para excluir',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir nota Nota para excluir"]')
+      ?.click();
+    harness.detectChanges();
+
+    const dialog = harness.routeNativeElement?.querySelector<HTMLElement>('[role="alertdialog"]');
+    const cancel = dialog?.querySelector<HTMLButtonElement>('button:first-child');
+    const confirm = dialog?.querySelector<HTMLButtonElement>('button:last-child');
+
+    const shiftTab = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    cancel?.dispatchEvent(shiftTab);
+    expect(shiftTab.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(confirm);
+
+    const tab = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      bubbles: true,
+      cancelable: true,
+    });
+    confirm?.dispatchEvent(tab);
+    expect(tab.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(cancel);
   });
 
   it('confirms deletion with the selected ID and removes the note on HTTP 204', async () => {
@@ -542,6 +593,9 @@ describe('NotesPage', () => {
         'button[aria-label="Excluir nota Nota pessoal"]',
       )?.disabled,
     ).toBe(true);
+    expect(document.activeElement).toBe(
+      harness.routeNativeElement?.querySelector('[role="alertdialog"]'),
+    );
     request.flush(null, { status: 204, statusText: 'No Content' });
     harness.detectChanges();
 
@@ -551,6 +605,7 @@ describe('NotesPage', () => {
     ).toEqual(['Nota pessoal']);
     expect(harness.routeNativeElement?.querySelector('[role="alertdialog"]')).toBeNull();
     expect(harness.routeNativeElement?.textContent).toContain('foi excluída');
+    expect(document.activeElement).toBe(harness.routeNativeElement?.querySelector('h1'));
   });
 
   it('shows the empty state after deleting the last note', async () => {

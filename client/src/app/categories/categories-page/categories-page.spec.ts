@@ -166,18 +166,65 @@ describe('CategoriesPage', () => {
     harness.detectChanges();
 
     const dialog = harness.routeNativeElement?.querySelector('[role="alertdialog"]');
+    const cancelButton = dialog?.querySelector<HTMLButtonElement>('button:first-child');
     expect(dialog?.getAttribute('aria-modal')).toBe('true');
     expect(dialog?.getAttribute('aria-labelledby')).toBe('delete-category-title');
     expect(dialog?.textContent).toContain('Trabalho');
     expect(dialog?.textContent).toContain('As notas não serão excluídas');
     expect(dialog?.textContent).toContain('deixarão de estar associadas');
+    expect(document.activeElement).toBe(cancelButton);
+    expect(harness.routeNativeElement?.querySelector('section > div')?.hasAttribute('inert')).toBe(
+      true,
+    );
 
-    dialog?.querySelector<HTMLButtonElement>('button')?.click();
+    cancelButton?.click();
     harness.detectChanges();
 
     expect(harness.routeNativeElement?.querySelector('[role="alertdialog"]')).toBeNull();
     expect(harness.routeNativeElement?.textContent).toContain('Pessoal');
+    expect(document.activeElement).toBe(
+      harness.routeNativeElement?.querySelector<HTMLButtonElement>(
+        'button[aria-label="Excluir categoria Trabalho"]',
+      ),
+    );
     httpTesting.expectNone('http://localhost:5146/categorias/second-id');
+  });
+
+  it('keeps Tab and Shift+Tab navigation inside the category confirmation', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/categorias');
+    httpTesting.expectOne('http://localhost:5146/categorias').flush([
+      { id: 'category-id', titulo: 'Trabalho' },
+    ]);
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir categoria Trabalho"]')
+      ?.click();
+    harness.detectChanges();
+
+    const dialog = harness.routeNativeElement?.querySelector<HTMLElement>('[role="alertdialog"]');
+    const cancel = dialog?.querySelector<HTMLButtonElement>('button:first-child');
+    const confirm = dialog?.querySelector<HTMLButtonElement>('button:last-child');
+
+    cancel?.focus();
+    const shiftTab = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    cancel?.dispatchEvent(shiftTab);
+    expect(shiftTab.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(confirm);
+
+    const tab = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      bubbles: true,
+      cancelable: true,
+    });
+    confirm?.dispatchEvent(tab);
+    expect(tab.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(cancel);
   });
 
   it('confirms deletion with the selected ID and removes the item from the list', async () => {
@@ -207,6 +254,9 @@ describe('CategoriesPage', () => {
     expect(harness.routeNativeElement?.textContent).toContain('Pessoal');
     expect(harness.routeNativeElement?.textContent).not.toContain('Trabalho');
     expect(harness.routeNativeElement?.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(document.activeElement).toBe(
+      harness.routeNativeElement?.querySelector('h1'),
+    );
   });
 
   it('blocks duplicate confirmations and other category deletion while a request is pending', async () => {
@@ -235,6 +285,7 @@ describe('CategoriesPage', () => {
         ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir categoria Trabalho"]')
         ?.disabled,
     ).toBe(true);
+    expect(document.activeElement).toBe(dialog);
     httpTesting.expectNone('http://localhost:5146/categorias/second-id');
     request.flush(null, { status: 204, statusText: 'No Content' });
     harness.detectChanges();
