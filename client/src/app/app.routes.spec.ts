@@ -3,13 +3,16 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
+import { afterEach } from 'vitest';
 import { routes } from './app.routes';
 import { Login } from './auth/login/login';
 import { API_BASE_URL, AUTH_SESSION_STORAGE } from './auth/auth.tokens';
+import { AuthStateService } from './auth/auth-state.service';
 import { WorkspaceHome } from './workspace/home/workspace-home';
 
 describe('app routes', () => {
   beforeEach(() => {
+    sessionStorage.clear();
     TestBed.configureTestingModule({
       providers: [
         provideRouter(routes),
@@ -21,6 +24,11 @@ describe('app routes', () => {
     });
   });
 
+  afterEach(() => {
+    sessionStorage.clear();
+    TestBed.resetTestingModule();
+  });
+
   it('loads the login page at /login', async () => {
     const harness = await RouterTestingHarness.create();
     const component = await harness.navigateByUrl('/login', Login);
@@ -28,7 +36,14 @@ describe('app routes', () => {
     expect(component).toBeInstanceOf(Login);
   });
 
-  it('loads the workspace page at /app without requiring authentication', async () => {
+  it('loads the workspace page at /app with a valid session', async () => {
+    TestBed.inject(AuthStateService).iniciarSessao({
+      usuarioId: 'user-id',
+      nome: 'Ana',
+      email: 'ana@example.com',
+      accessToken: 'access-token',
+      dataExpiracaoEmUtc: '2099-01-01T00:00:00Z',
+    });
     const harness = await RouterTestingHarness.create();
     const component = await harness.navigateByUrl('/app', WorkspaceHome);
 

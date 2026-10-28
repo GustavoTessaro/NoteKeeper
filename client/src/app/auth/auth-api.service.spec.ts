@@ -69,28 +69,28 @@ describe('AuthApiService', () => {
     httpRequest.flush(response);
   });
 
-  it('sends the bearer token when obtaining the current user', () => {
+  it('requests the current user without manually setting authorization', () => {
     const response: UsuarioDto = {
       id: 'user-id',
       nome: 'Ana',
       email: 'ana@example.com',
     };
 
-    service.obterUsuario('access-token').subscribe((user) => expect(user).toEqual(response));
+    service.obterUsuario().subscribe((user) => expect(user).toEqual(response));
 
     const httpRequest = httpTesting.expectOne('http://localhost:5146/auth/me');
     expect(httpRequest.request.method).toBe('GET');
-    expect(httpRequest.request.headers.get('Authorization')).toBe('Bearer access-token');
+    expect(httpRequest.request.headers.has('Authorization')).toBe(false);
     httpRequest.flush(response);
   });
 
-  it('sends the bearer token when logging out and expects an empty response', () => {
-    service.logout('access-token').subscribe((result) => expect(result).toBeNull());
+  it('requests logout without manually setting authorization', () => {
+    service.logout().subscribe((result) => expect(result).toBeNull());
 
     const httpRequest = httpTesting.expectOne('http://localhost:5146/auth/logout');
     expect(httpRequest.request.method).toBe('POST');
     expect(httpRequest.request.body).toBeNull();
-    expect(httpRequest.request.headers.get('Authorization')).toBe('Bearer access-token');
+    expect(httpRequest.request.headers.has('Authorization')).toBe(false);
     httpRequest.flush(null);
   });
 });

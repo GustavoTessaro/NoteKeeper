@@ -1,4 +1,4 @@
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from './auth.tokens';
@@ -17,25 +17,15 @@ export class AuthApiService {
     return this.http.post<TokenDto>(this.endpoint('/auth/login'), request);
   }
 
-  obterUsuario(accessToken: string): Observable<UsuarioDto> {
-    return this.http.get<UsuarioDto>(this.endpoint('/auth/me'), {
-      headers: this.authorizationHeaders(accessToken),
-    });
+  obterUsuario(): Observable<UsuarioDto> {
+    return this.http.get<UsuarioDto>(this.endpoint('/auth/me'));
   }
 
-  logout(accessToken: string): Observable<void> {
-    return this.http.post<void>(
-      this.endpoint('/auth/logout'),
-      null,
-      { headers: this.authorizationHeaders(accessToken) },
-    );
+  logout(): Observable<void> {
+    return this.http.post<void>(this.endpoint('/auth/logout'), null);
   }
 
   private endpoint(path: string): string {
     return `${this.apiBaseUrl.replace(/\/+$/, '')}${path}`;
-  }
-
-  private authorizationHeaders(accessToken: string): HttpHeaders {
-    return new HttpHeaders({ Authorization: `Bearer ${accessToken}` });
   }
 }
