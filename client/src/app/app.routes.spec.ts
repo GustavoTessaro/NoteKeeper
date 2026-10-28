@@ -1,6 +1,6 @@
 import { provideHttpClient } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { afterEach } from 'vitest';
@@ -9,6 +9,7 @@ import { Login } from './auth/login/login';
 import { API_BASE_URL, AUTH_SESSION_STORAGE } from './auth/auth.tokens';
 import { AuthStateService } from './auth/auth-state.service';
 import { WorkspaceHome } from './workspace/home/workspace-home';
+import { CategoriesPage } from './categories/categories-page/categories-page';
 
 describe('app routes', () => {
   beforeEach(() => {
@@ -48,6 +49,55 @@ describe('app routes', () => {
     const component = await harness.navigateByUrl('/app', WorkspaceHome);
 
     expect(component).toBeInstanceOf(WorkspaceHome);
+  });
+
+  it('loads the categories page under the protected /app route', async () => {
+    TestBed.inject(AuthStateService).iniciarSessao({
+      usuarioId: 'user-id',
+      nome: 'Ana',
+      email: 'ana@example.com',
+      accessToken: 'access-token',
+      dataExpiracaoEmUtc: '2099-01-01T00:00:00Z',
+    });
+
+    const harness = await RouterTestingHarness.create();
+    const component = await harness.navigateByUrl('/app/categorias', CategoriesPage);
+    const request = TestBed.inject(HttpTestingController).expectOne(
+      'http://localhost:5146/categorias',
+    );
+
+    expect(component).toBeInstanceOf(CategoriesPage);
+    request.flush([]);
+  });
+
+  it('navigates from workspace to categories using the visible link', async () => {
+    TestBed.inject(AuthStateService).iniciarSessao({
+      usuarioId: 'user-id',
+      nome: 'Ana',
+      email: 'ana@example.com',
+      accessToken: 'access-token',
+      dataExpiracaoEmUtc: '2099-01-01T00:00:00Z',
+    });
+
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app', WorkspaceHome);
+    harness.routeNativeElement
+      ?.querySelector<HTMLAnchorElement>('a[href="/app/categorias"]')
+      ?.click();
+    await harness.fixture.whenStable();
+
+    expect(TestBed.inject(Router).url).toBe('/app/categorias');
+    TestBed.inject(HttpTestingController)
+      .expectOne('http://localhost:5146/categorias')
+      .flush([]);
+  });
+
+  it('redirects an unauthenticated categories route to login', async () => {
+    const harness = await RouterTestingHarness.create();
+
+    await harness.navigateByUrl('/app/categorias');
+
+    expect(TestBed.inject(Router).url).toBe('/login?returnUrl=%2Fapp%2Fcategorias');
   });
 
   it('redirects the root and unknown paths to /login', async () => {

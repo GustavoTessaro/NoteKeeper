@@ -15,8 +15,21 @@ export const routes: Routes = [
     path: 'app',
     canActivate: [authGuard],
     canActivateChild: [authGuard],
-    loadComponent: () =>
-      import('./workspace/home/workspace-home').then((component) => component.WorkspaceHome),
+    children: [
+      {
+        path: '',
+        pathMatch: 'full',
+        loadComponent: () =>
+          import('./workspace/home/workspace-home').then((component) => component.WorkspaceHome),
+      },
+      {
+        path: 'categorias',
+        loadComponent: () =>
+          import('./categories/categories-page/categories-page').then(
+            (component) => component.CategoriesPage,
+          ),
+      },
+    ],
   },
   {
     path: '',

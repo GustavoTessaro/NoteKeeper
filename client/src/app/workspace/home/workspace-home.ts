@@ -1,12 +1,12 @@
 import { Component, inject, signal } from '@angular/core';
-import { Router } from '@angular/router';
-import { LucideLogOut } from '@lucide/angular';
+import { Router, RouterLink } from '@angular/router';
+import { LucideLogOut, LucideTags } from '@lucide/angular';
 import { EMPTY, catchError, finalize } from 'rxjs';
 import { AuthApiService } from '../../auth/auth-api.service';
 import { AuthStateService } from '../../auth/auth-state.service';
 
 @Component({
-  imports: [LucideLogOut],
+  imports: [LucideLogOut, LucideTags, RouterLink],
   selector: 'app-workspace-home',
   template: `
     <main class="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 sm:py-12">
@@ -35,7 +35,16 @@ import { AuthStateService } from '../../auth/auth-state.service';
           </button>
         </header>
 
-        <p class="mt-8 text-slate-600">A área principal da aplicação será construída nas próximas etapas.</p>
+        <nav class="mt-8">
+          <a
+            routerLink="/app/categorias"
+            class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          >
+            <svg lucideTags aria-hidden="true" class="size-4"></svg>
+            <span>Gerenciar categorias</span>
+          </a>
+        </nav>
+        <p class="mt-6 text-slate-600">A área principal da aplicação será construída nas próximas etapas.</p>
       </section>
     </main>
   `,
