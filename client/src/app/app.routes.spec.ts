@@ -43,4 +43,25 @@ describe('app routes', () => {
     await harness.navigateByUrl('/unknown');
     expect(TestBed.inject(Router).url).toBe('/login');
   });
+
+  it('navigates between login and registration using their links', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/login');
+
+    const registerLink = harness.routeNativeElement?.querySelector<HTMLAnchorElement>(
+      'a[href="/cadastro"]',
+    );
+    expect(registerLink).not.toBeNull();
+    registerLink?.click();
+    await harness.fixture.whenStable();
+    expect(TestBed.inject(Router).url).toBe('/cadastro');
+
+    const loginLink = harness.routeNativeElement?.querySelector<HTMLAnchorElement>(
+      'a[href="/login"]',
+    );
+    expect(loginLink).not.toBeNull();
+    loginLink?.click();
+    await harness.fixture.whenStable();
+    expect(TestBed.inject(Router).url).toBe('/login');
+  });
 });

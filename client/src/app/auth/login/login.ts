@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { email, form, FormField, required } from '@angular/forms/signals';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 import { LucideEye, LucideEyeOff, LucideLockKeyhole, LucideNotebookPen } from '@lucide/angular';
 import { AuthApiService } from '../auth-api.service';
@@ -9,7 +9,7 @@ import { AuthStateService } from '../auth-state.service';
 import { LoginRequest } from '../auth.models';
 
 @Component({
-  imports: [FormField, LucideEye, LucideEyeOff, LucideLockKeyhole, LucideNotebookPen],
+  imports: [FormField, LucideEye, LucideEyeOff, LucideLockKeyhole, LucideNotebookPen, RouterLink],
   selector: 'app-login',
   template: `
     <main class="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10 sm:px-6">
@@ -22,6 +22,12 @@ import { LoginRequest } from '../auth.models';
           <h1 class="mt-2 text-3xl font-bold tracking-tight text-slate-900">Bem-vindo de volta</h1>
           <p class="mt-2 text-sm text-slate-600">Entre na sua conta para continuar.</p>
         </header>
+
+        @if (cadastroSucesso) {
+          <p class="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
+            Cadastro realizado com sucesso. Você já pode entrar.
+          </p>
+        }
 
         <form (submit)="entrar($event)" novalidate>
           <div class="space-y-5">
@@ -102,7 +108,10 @@ import { LoginRequest } from '../auth.models';
 
         <p class="mt-7 text-center text-sm text-slate-600">
           Ainda não tem conta?
-          <span class="font-semibold text-indigo-600">Cadastro em breve</span>
+          <a
+            routerLink="/cadastro"
+            class="font-semibold text-indigo-600 underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          >Cadastre-se</a>
         </p>
       </section>
     </main>
@@ -112,6 +121,8 @@ export class Login {
   private readonly authApi = inject(AuthApiService);
   private readonly authState = inject(AuthStateService);
   private readonly router = inject(Router);
+  protected readonly cadastroSucesso =
+    inject(ActivatedRoute).snapshot.queryParamMap.get('cadastro') === 'sucesso';
 
   private readonly model = signal<LoginRequest>({ email: '', senha: '' });
   protected readonly loginForm = form(this.model, (path) => {

@@ -6,6 +6,11 @@ export const routes: Routes = [
     loadComponent: () => import('./auth/login/login').then((component) => component.Login),
   },
   {
+    path: 'cadastro',
+    loadComponent: () =>
+      import('./auth/register/register').then((component) => component.Register),
+  },
+  {
     path: 'app',
     loadComponent: () =>
       import('./workspace/home/workspace-home').then((component) => component.WorkspaceHome),
