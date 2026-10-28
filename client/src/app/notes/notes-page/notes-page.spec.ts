@@ -130,6 +130,257 @@ describe('NotesPage', () => {
     expect(harness.routeNativeElement?.textContent).toContain('Nenhuma nota cadastrada');
   });
 
+  it.each([
+    { initialStatus: 'Ativa', newStatus: 'Arquivada', action: 'Arquivar' },
+    { initialStatus: 'Arquivada', newStatus: 'Ativa', action: 'Reativar' },
+  ] as const)(
+    '$action sends the complete note payload and updates only after success',
+    async ({ initialStatus, newStatus, action }) => {
+      const harness = await RouterTestingHarness.create();
+      await harness.navigateByUrl('/app/notas');
+      httpTesting.expectOne('http://localhost:5146/notas').flush([
+        {
+          id: 'note-id',
+          titulo: 'B Nota preservada',
+          descricao: 'Descrição preservada',
+          status: initialStatus,
+          categorias: [
+            { id: 'category-1', titulo: 'Trabalho' },
+            { id: 'category-2', titulo: 'Pessoal' },
+          ],
+          criadoEm: '2026-10-28T15:00:00Z',
+          atualizadoEm: '2026-10-28T16:00:00Z',
+        },
+        {
+          id: 'note-after',
+          titulo: 'C Outra nota',
+          descricao: null,
+          status: 'Ativa',
+          categorias: [],
+          criadoEm: '2026-10-28T15:00:00Z',
+          atualizadoEm: '2026-10-28T16:00:00Z',
+        },
+      ]);
+      harness.detectChanges();
+
+      const button = Array.from(
+        harness.routeNativeElement?.querySelectorAll<HTMLButtonElement>('button') ?? [],
+      ).find((element) => element.textContent?.trim() === action);
+      expect(button).toBeDefined();
+      button?.click();
+      harness.detectChanges();
+
+      const request = httpTesting.expectOne('http://localhost:5146/notas/note-id');
+      expect(request.request.method).toBe('PUT');
+      expect(request.request.body).toEqual({
+        titulo: 'B Nota preservada',
+        descricao: 'Descrição preservada',
+        status: newStatus,
+        categoriaIds: ['category-1', 'category-2'],
+      });
+      expect(harness.routeNativeElement?.textContent).toContain(initialStatus);
+      expect(harness.routeNativeElement?.textContent).toContain(
+        initialStatus === 'Ativa' ? 'Arquivando...' : 'Reativando...',
+      );
+
+      request.flush({
+        id: 'note-id',
+        titulo: 'B Nota preservada',
+        descricao: 'Descrição preservada',
+        status: newStatus,
+        categorias: [
+          { id: 'category-1', titulo: 'Trabalho' },
+          { id: 'category-2', titulo: 'Pessoal' },
+        ],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T17:00:00Z',
+      });
+      harness.detectChanges();
+
+      expect(harness.routeNativeElement?.textContent).toContain(newStatus);
+      expect(harness.routeNativeElement?.textContent).not.toContain(
+        initialStatus === 'Ativa' ? 'Arquivando...' : 'Reativando...',
+      );
+      expect(
+        Array.from(harness.routeNativeElement?.querySelectorAll('li h2') ?? []).map(
+          (element) => element.textContent?.trim(),
+        ),
+      ).toEqual(['B Nota preservada', 'C Outra nota']);
+    },
+  );
+
+  it('sends an empty category list when archiving a note without categories', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/notas');
+    httpTesting.expectOne('http://localhost:5146/notas').flush([
+      {
+        id: 'note-id',
+        titulo: 'Sem categoria',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    Array.from(harness.routeNativeElement?.querySelectorAll<HTMLButtonElement>('button') ?? [])
+      .find((button) => button.textContent?.trim() === 'Arquivar')
+      ?.click();
+
+    const request = httpTesting.expectOne('http://localhost:5146/notas/note-id');
+    expect(request.request.body).toEqual({
+      titulo: 'Sem categoria',
+      descricao: null,
+      status: 'Arquivada',
+      categoriaIds: [],
+    });
+    request.flush({
+      id: 'note-id',
+      titulo: 'Sem categoria',
+      descricao: null,
+      status: 'Arquivada',
+      categorias: [],
+      criadoEm: '2026-10-28T15:00:00Z',
+      atualizadoEm: '2026-10-28T17:00:00Z',
+    });
+  });
+
+  it('prevents duplicate status updates for the same note', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/notas');
+    httpTesting.expectOne('http://localhost:5146/notas').flush([
+      {
+        id: 'note-id',
+        titulo: 'Nota',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    const button = Array.from(
+      harness.routeNativeElement?.querySelectorAll<HTMLButtonElement>('button') ?? [],
+    ).find((element) => element.textContent?.trim() === 'Arquivar');
+    button?.click();
+    button?.click();
+
+    const request = httpTesting.expectOne('http://localhost:5146/notas/note-id');
+    expect(request.request.method).toBe('PUT');
+    request.flush({
+      id: 'note-id',
+      titulo: 'Nota',
+      descricao: null,
+      status: 'Arquivada',
+      categorias: [],
+      criadoEm: '2026-10-28T15:00:00Z',
+      atualizadoEm: '2026-10-28T17:00:00Z',
+    });
+  });
+
+  it.each([
+    {
+      status: 404,
+      message: 'Esta nota não está mais disponível.',
+    },
+    {
+      status: 409,
+      message: 'A nota foi alterada e não foi possível atualizar o status.',
+    },
+  ])('offers a list refresh after HTTP $status', async ({ status, message }) => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/notas');
+    httpTesting.expectOne('http://localhost:5146/notas').flush([
+      {
+        id: 'note-id',
+        titulo: 'Nota',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    Array.from(harness.routeNativeElement?.querySelectorAll<HTMLButtonElement>('button') ?? [])
+      .find((button) => button.textContent?.trim() === 'Arquivar')
+      ?.click();
+    httpTesting.expectOne('http://localhost:5146/notas/note-id').flush(
+      {},
+      {
+        status,
+        statusText: status === 404 ? 'Not Found' : 'Conflict',
+      },
+    );
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.textContent).toContain(message);
+    expect(
+      Array.from(harness.routeNativeElement?.querySelectorAll<HTMLButtonElement>('button') ?? [])
+        .some((button) => button.textContent?.includes('Atualizar lista')),
+    ).toBe(true);
+    expect(harness.routeNativeElement?.textContent).toContain('Ativa');
+
+    Array.from(harness.routeNativeElement?.querySelectorAll<HTMLButtonElement>('button') ?? [])
+      .find((button) => button.textContent?.includes('Atualizar lista'))
+      ?.click();
+    const refresh = httpTesting.expectOne('http://localhost:5146/notas');
+    refresh.flush([]);
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.textContent).toContain('Nenhuma nota cadastrada');
+  });
+
+  it('shows a friendly network error and allows retrying the status update', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/notas');
+    httpTesting.expectOne('http://localhost:5146/notas').flush([
+      {
+        id: 'note-id',
+        titulo: 'Nota',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    const archive = () =>
+      Array.from(harness.routeNativeElement?.querySelectorAll<HTMLButtonElement>('button') ?? [])
+        .find((button) => button.textContent?.trim() === 'Arquivar')
+        ?.click();
+    archive();
+    httpTesting.expectOne('http://localhost:5146/notas/note-id').error(new ProgressEvent('error'));
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.textContent).toContain(
+      'Verifique sua conexão e tente novamente.',
+    );
+    expect(harness.routeNativeElement?.textContent).toContain('Ativa');
+
+    archive();
+    const retry = httpTesting.expectOne('http://localhost:5146/notas/note-id');
+    retry.flush({
+      id: 'note-id',
+      titulo: 'Nota',
+      descricao: null,
+      status: 'Arquivada',
+      categorias: [],
+      criadoEm: '2026-10-28T15:00:00Z',
+      atualizadoEm: '2026-10-28T17:00:00Z',
+    });
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.textContent).toContain('Arquivada');
+  });
+
   it('formats valid update dates and handles malformed dates safely', async () => {
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/app/notas');
