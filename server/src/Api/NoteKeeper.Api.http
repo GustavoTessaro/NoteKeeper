@@ -1,0 +1,63 @@
+@baseUrl = http://localhost:5146
+@token = {{token}}
+
+### Cadastro
+POST {{baseUrl}}/auth/cadastro
+Content-Type: application/json
+
+{
+  "nome": "Pessoa Usuária",
+  "email": "pessoa@example.com",
+  "senha": "SenhaSegura1!"
+}
+
+### Login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "pessoa@example.com",
+  "senha": "SenhaSegura1!"
+}
+
+### Usuário atual
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{token}}
+
+### Criar categoria
+POST {{baseUrl}}/categorias
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "titulo": "Trabalho" }
+
+### Listar categorias
+GET {{baseUrl}}/categorias
+Authorization: Bearer {{token}}
+
+### Criar nota
+POST {{baseUrl}}/notas
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "titulo": "Ideia de projeto",
+  "descricao": "Uma anotação curta.",
+  "categoriaIds": []
+}
+
+### Listar notas
+GET {{baseUrl}}/notas
+Authorization: Bearer {{token}}
+
+### Listar notas associadas a uma categoria
+GET {{baseUrl}}/notas?categoriaIds={{categoriaId}}
+Authorization: Bearer {{token}}
+
+### Listar notas associadas a todas as categorias informadas (interseção)
+GET {{baseUrl}}/notas?categoriaIds={{categoriaId}}&categoriaIds={{outraCategoriaId}}
+Authorization: Bearer {{token}}
+
+### Logout (token atual é revogado imediatamente)
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{token}}
