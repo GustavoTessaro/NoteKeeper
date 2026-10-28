@@ -40,8 +40,6 @@ O projeto foi desenvolvido como atividade da **Academia do Programador**, integr
 
 ## 🖼️ Demonstração
 
-> **Capturas de tela:** adicione os arquivos indicados em `docs/screenshots/` para que as imagens apareçam automaticamente no GitHub. Os caminhos abaixo são sugestões e não representam arquivos já existentes.
-
 <details>
 <summary><strong>📸 Ver sugestões de capturas para a documentação</strong></summary>
 
@@ -53,7 +51,7 @@ O projeto foi desenvolvido como atividade da **Academia do Programador**, integr
 | Listagem de notas | `docs/screenshots/notas.png` |
 | Criação/edição de nota | `docs/screenshots/formulario-nota.png` |
 | Categorias | `docs/screenshots/categorias.png` |
-| Filtro por categorias | `docs/screenshots/filtro-categorias.png` |
+| Criação/edição de categorias | `docs/screenshots/formulario-categoria.png` |
 
 Após salvar as imagens, você pode substituir esta seção por, por exemplo:
 
