@@ -43,22 +43,13 @@ O projeto foi desenvolvido como atividade da **Academia do Programador**, integr
 <details>
 <summary><strong>📸 Ver sugestões de capturas para a documentação</strong></summary>
 
-| Tela | Arquivo sugerido |
-| --- | --- |
-| Login | `docs/screenshots/login.png` |
-| Cadastro | `docs/screenshots/cadastro.png` |
-| Workspace | `docs/screenshots/workspace.png` |
-| Listagem de notas | `docs/screenshots/notas.png` |
-| Criação/edição de nota | `docs/screenshots/formulario-nota.png` |
-| Categorias | `docs/screenshots/categorias.png` |
-| Criação/edição de categorias | `docs/screenshots/formulario-categoria.png` |
-
-Após salvar as imagens, você pode substituir esta seção por, por exemplo:
-
-```md
 ![Tela de login do NoteKeeper](docs/screenshots/login.png)
-![Gerenciamento de notas](docs/screenshots/notas.png)
-```
+![Tela de Cadastro](docs/screenshots/cadastro.png)
+![Tela deWorkspace](docs/screenshots/workspace.png)
+![Tela de Listagem de notas](docs/screenshots/notas.png)
+![Tela de Criação/edição de nota](docs/screenshots/formulario-nota.png)
+![Tela de Categorias](docs/screenshots/categorias.png)
+![Tela de Criação/edição de categoria](docs/screenshots/formulario-categoria.png)
 
 </details>
 
