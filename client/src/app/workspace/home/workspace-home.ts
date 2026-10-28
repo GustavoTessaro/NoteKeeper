@@ -1,12 +1,12 @@
 import { Component, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { LucideLogOut, LucideTags } from '@lucide/angular';
+import { LucideLogOut, LucideNotebookPen, LucideTags } from '@lucide/angular';
 import { EMPTY, catchError, finalize } from 'rxjs';
 import { AuthApiService } from '../../auth/auth-api.service';
 import { AuthStateService } from '../../auth/auth-state.service';
 
 @Component({
-  imports: [LucideLogOut, LucideTags, RouterLink],
+  imports: [LucideLogOut, LucideNotebookPen, LucideTags, RouterLink],
   selector: 'app-workspace-home',
   template: `
     <main class="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 sm:py-12">
@@ -35,10 +35,17 @@ import { AuthStateService } from '../../auth/auth-state.service';
           </button>
         </header>
 
-        <nav class="mt-8">
+        <nav class="mt-8 flex flex-wrap gap-3">
+          <a
+            routerLink="/app/notas"
+            class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          >
+            <svg lucideNotebookPen aria-hidden="true" class="size-4"></svg>
+            <span>Gerenciar notas</span>
+          </a>
           <a
             routerLink="/app/categorias"
-            class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            class="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
           >
             <svg lucideTags aria-hidden="true" class="size-4"></svg>
             <span>Gerenciar categorias</span>

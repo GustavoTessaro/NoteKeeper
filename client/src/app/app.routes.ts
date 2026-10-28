@@ -43,6 +43,11 @@ export const routes: Routes = [
             (component) => component.CategoryForm,
           ),
       },
+      {
+        path: 'notas',
+        loadComponent: () =>
+          import('./notes/notes-page/notes-page').then((component) => component.NotesPage),
+      },
     ],
   },
   {

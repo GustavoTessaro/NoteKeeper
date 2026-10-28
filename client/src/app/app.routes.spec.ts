@@ -10,6 +10,7 @@ import { API_BASE_URL, AUTH_SESSION_STORAGE } from './auth/auth.tokens';
 import { AuthStateService } from './auth/auth-state.service';
 import { WorkspaceHome } from './workspace/home/workspace-home';
 import { CategoriesPage } from './categories/categories-page/categories-page';
+import { NotesPage } from './notes/notes-page/notes-page';
 
 describe('app routes', () => {
   beforeEach(() => {
@@ -70,6 +71,32 @@ describe('app routes', () => {
     request.flush([]);
   });
 
+  it('loads the notes page under the protected /app route', async () => {
+    TestBed.inject(AuthStateService).iniciarSessao({
+      usuarioId: 'user-id',
+      nome: 'Ana',
+      email: 'ana@example.com',
+      accessToken: 'access-token',
+      dataExpiracaoEmUtc: '2099-01-01T00:00:00Z',
+    });
+
+    const harness = await RouterTestingHarness.create();
+    const component = await harness.navigateByUrl('/app/notas', NotesPage);
+
+    expect(component).toBeInstanceOf(NotesPage);
+    TestBed.inject(HttpTestingController)
+      .expectOne('http://localhost:5146/notas')
+      .flush([]);
+  });
+
+  it('redirects an unauthenticated direct visit to /app/notas to login', async () => {
+    const harness = await RouterTestingHarness.create();
+
+    await harness.navigateByUrl('/app/notas');
+
+    expect(TestBed.inject(Router).url).toBe('/login?returnUrl=%2Fapp%2Fnotas');
+  });
+
   it('navigates from workspace to categories using the visible link', async () => {
     TestBed.inject(AuthStateService).iniciarSessao({
       usuarioId: 'user-id',
@@ -89,6 +116,28 @@ describe('app routes', () => {
     expect(TestBed.inject(Router).url).toBe('/app/categorias');
     TestBed.inject(HttpTestingController)
       .expectOne('http://localhost:5146/categorias')
+      .flush([]);
+  });
+
+  it('navigates from workspace to notes using the visible link', async () => {
+    TestBed.inject(AuthStateService).iniciarSessao({
+      usuarioId: 'user-id',
+      nome: 'Ana',
+      email: 'ana@example.com',
+      accessToken: 'access-token',
+      dataExpiracaoEmUtc: '2099-01-01T00:00:00Z',
+    });
+
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app', WorkspaceHome);
+    harness.routeNativeElement
+      ?.querySelector<HTMLAnchorElement>('a[href="/app/notas"]')
+      ?.click();
+    await harness.fixture.whenStable();
+
+    expect(TestBed.inject(Router).url).toBe('/app/notas');
+    TestBed.inject(HttpTestingController)
+      .expectOne('http://localhost:5146/notas')
       .flush([]);
   });
 
