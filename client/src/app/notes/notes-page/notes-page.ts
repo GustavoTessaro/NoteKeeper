@@ -12,10 +12,13 @@ import {
   LucideTrash2,
   LucideX,
 } from '@lucide/angular';
+import { CategoriaDto } from '../../categories/category.models';
+import { CategoriesApiService } from '../../categories/categories-api.service';
 import { AtualizarNotaRequest, NotaDto, StatusNota } from '../note.models';
 import { NotesApiService } from '../notes-api.service';
 
 type NotesPageState = 'loading' | 'loaded' | 'empty' | 'error';
+type CategoriesPageState = 'loading' | 'loaded' | 'empty' | 'error';
 
 interface NoteOperationError {
   message: string;
@@ -69,6 +72,76 @@ interface NoteOperationError {
           </a>
         </div>
 
+        <section
+          class="mt-8 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:p-5"
+          aria-labelledby="category-filter-title"
+          [attr.aria-busy]="estadoCategorias() === 'loading'"
+        >
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div class="min-w-0 flex-1">
+              <h2 id="category-filter-title" class="font-semibold text-slate-900">
+                Filtrar por categorias
+              </h2>
+              @switch (estadoCategorias()) {
+                @case ('loading') {
+                  <p class="mt-2 text-sm text-slate-600" role="status">Carregando categorias...</p>
+                }
+                @case ('error') {
+                  <div class="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <p class="text-sm text-rose-800" role="alert">
+                      Não foi possível carregar as categorias. Tente novamente.
+                    </p>
+                    <button
+                      type="button"
+                      (click)="carregarCategorias()"
+                      class="inline-flex items-center gap-2 self-start rounded-lg border border-rose-300 px-3 py-1.5 text-sm font-semibold text-rose-800 transition hover:bg-rose-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-700"
+                    >
+                      <svg lucideRefreshCw aria-hidden="true" class="size-4"></svg>
+                      <span>Tentar novamente</span>
+                    </button>
+                  </div>
+                }
+                @case ('empty') {
+                  <p class="mt-2 text-sm text-slate-600">
+                    Você ainda não tem categorias para filtrar.
+                  </p>
+                }
+                @case ('loaded') {
+                  <fieldset class="mt-3" [disabled]="acoesBloqueadas()">
+                    <legend class="sr-only">Selecione uma ou mais categorias</legend>
+                    <div class="flex flex-wrap gap-2">
+                      @for (categoria of categorias(); track categoria.id) {
+                        <label
+                          class="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-indigo-300 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 has-[:checked]:text-indigo-800"
+                        >
+                          <input
+                            type="checkbox"
+                            [checked]="categoriaEstaSelecionada(categoria.id)"
+                            (change)="alternarCategoria(categoria.id, $event)"
+                            [attr.aria-label]="'Filtrar por categoria ' + categoria.titulo"
+                            class="size-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"
+                          />
+                          <span>{{ categoria.titulo }}</span>
+                        </label>
+                      }
+                    </div>
+                  </fieldset>
+                }
+              }
+            </div>
+            @if (temFiltrosAtivos()) {
+              <button
+                type="button"
+                (click)="limparFiltros()"
+                class="inline-flex shrink-0 items-center gap-2 self-start rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+              >
+                <svg lucideX aria-hidden="true" class="size-4"></svg>
+                <span>Limpar filtros</span>
+              </button>
+            }
+          </div>
+        </section>
+
         <section class="mt-8" aria-live="polite" [attr.aria-busy]="estado() === 'loading'">
           @switch (estado()) {
             @case ('loading') {
@@ -79,8 +152,15 @@ interface NoteOperationError {
             }
             @case ('empty') {
               <div class="rounded-xl border border-dashed border-slate-300 p-8 text-center">
-                <h2 class="font-semibold text-slate-900">Nenhuma nota cadastrada</h2>
-                <p class="mt-2 text-sm text-slate-600">Suas notas aparecerão aqui quando você criar a primeira.</p>
+                @if (temFiltrosAtivos()) {
+                  <h2 class="font-semibold text-slate-900">Nenhuma nota corresponde aos filtros</h2>
+                  <p class="mt-2 text-sm text-slate-600">
+                    Tente selecionar outras categorias ou limpar os filtros.
+                  </p>
+                } @else {
+                  <h2 class="font-semibold text-slate-900">Nenhuma nota cadastrada</h2>
+                  <p class="mt-2 text-sm text-slate-600">Suas notas aparecerão aqui quando você criar a primeira.</p>
+                }
               </div>
             }
             @case ('error') {
@@ -265,9 +345,14 @@ interface NoteOperationError {
 })
 export class NotesPage implements OnInit {
   private readonly notesApi = inject(NotesApiService);
+  private readonly categoriesApi = inject(CategoriesApiService);
+  private notesRequestVersion = 0;
 
   protected readonly notas = signal<NotaDto[]>([]);
   protected readonly estado = signal<NotesPageState>('loading');
+  protected readonly categorias = signal<CategoriaDto[]>([]);
+  protected readonly estadoCategorias = signal<CategoriesPageState>('loading');
+  protected readonly categoriasSelecionadas = signal<ReadonlySet<string>>(new Set());
   protected readonly notasEmProcessamento = signal<ReadonlySet<string>>(new Set());
   protected readonly erroOperacao = signal<Readonly<Record<string, NoteOperationError>>>({});
   protected readonly notaParaExcluir = signal<NotaDto | null>(null);
@@ -276,19 +361,75 @@ export class NotesPage implements OnInit {
   protected readonly mensagemStatus = signal<string | null>(null);
 
   ngOnInit(): void {
+    this.carregarCategorias();
     this.carregar();
   }
 
   protected carregar(): void {
+    const requestVersion = ++this.notesRequestVersion;
+    const categoriaIds = [...this.categoriasSelecionadas()];
     this.estado.set('loading');
     this.erroOperacao.set({});
-    this.notesApi.listar().subscribe({
+    this.notesApi.listar(categoriaIds.length > 0 ? categoriaIds : undefined).subscribe({
       next: (notas) => {
+        if (requestVersion !== this.notesRequestVersion) {
+          return;
+        }
         this.notas.set(notas);
         this.estado.set(notas.length === 0 ? 'empty' : 'loaded');
       },
-      error: () => this.estado.set('error'),
+      error: () => {
+        if (requestVersion === this.notesRequestVersion) {
+          this.estado.set('error');
+        }
+      },
     });
+  }
+
+  protected carregarCategorias(): void {
+    this.estadoCategorias.set('loading');
+    this.categoriesApi.listar().subscribe({
+      next: (categorias) => {
+        this.categorias.set(categorias);
+        this.estadoCategorias.set(categorias.length === 0 ? 'empty' : 'loaded');
+      },
+      error: () => this.estadoCategorias.set('error'),
+    });
+  }
+
+  protected alternarCategoria(id: string, event: Event): void {
+    if (!(event.target instanceof HTMLInputElement)) {
+      return;
+    }
+
+    const checked = event.target.checked;
+    this.categoriasSelecionadas.update((selected) => {
+      const updated = new Set(selected);
+      if (checked) {
+        updated.add(id);
+      } else {
+        updated.delete(id);
+      }
+      return updated;
+    });
+    this.carregar();
+  }
+
+  protected limparFiltros(): void {
+    if (this.categoriasSelecionadas().size === 0) {
+      return;
+    }
+
+    this.categoriasSelecionadas.set(new Set());
+    this.carregar();
+  }
+
+  protected categoriaEstaSelecionada(id: string): boolean {
+    return this.categoriasSelecionadas().has(id);
+  }
+
+  protected temFiltrosAtivos(): boolean {
+    return this.categoriasSelecionadas().size > 0;
   }
 
   protected emProcessamento(id: string): boolean {

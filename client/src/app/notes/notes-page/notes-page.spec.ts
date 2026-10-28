@@ -17,6 +17,14 @@ import { NotesPage } from './notes-page';
 describe('NotesPage', () => {
   let httpTesting: HttpTestingController;
 
+  async function abrirNotas(harness: RouterTestingHarness): Promise<void> {
+    await harness.navigateByUrl('/app/notas', NotesPage);
+    httpTesting.expectOne('http://localhost:5146/categorias').flush([
+      { id: 'category-1', titulo: 'Trabalho' },
+      { id: 'category-2', titulo: 'Pessoal' },
+    ]);
+  }
+
   beforeEach(() => {
     sessionStorage.clear();
     TestBed.configureTestingModule({
@@ -45,9 +53,319 @@ describe('NotesPage', () => {
     TestBed.resetTestingModule();
   });
 
-  it('shows loading then displays notes, descriptions, categories and statuses in API order', async () => {
+  it('loads categories and notes independently and retries category loading after an error', async () => {
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/app/notas', NotesPage);
+
+    expect(harness.routeNativeElement?.textContent).toContain('Carregando categorias...');
+    expect(harness.routeNativeElement?.textContent).toContain('Carregando notas...');
+    httpTesting.expectOne('http://localhost:5146/notas').flush([]);
+    httpTesting.expectOne('http://localhost:5146/categorias').flush(
+      { detail: 'internal details' },
+      { status: 500, statusText: 'Internal Server Error' },
+    );
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.textContent).toContain(
+      'Não foi possível carregar as categorias.',
+    );
+    expect(harness.routeNativeElement?.textContent).toContain('Nenhuma nota cadastrada');
+
+    Array.from(harness.routeNativeElement?.querySelectorAll<HTMLButtonElement>('button') ?? [])
+      .find((button) => button.textContent?.includes('Tentar novamente'))
+      ?.click();
+    const retry = httpTesting.expectOne('http://localhost:5146/categorias');
+    retry.flush([{ id: 'category-1', titulo: 'Trabalho' }]);
+    harness.detectChanges();
+
+    expect(
+      harness.routeNativeElement?.querySelector(
+        'input[aria-label="Filtrar por categoria Trabalho"]',
+      ),
+    ).not.toBeNull();
+  });
+
+  it('filters by one and multiple categories using the API AND query semantics', async () => {
+    const harness = await RouterTestingHarness.create();
+    await abrirNotas(harness);
+    httpTesting.expectOne('http://localhost:5146/notas').flush([]);
+    harness.detectChanges();
+
+    const trabalho = harness.routeNativeElement?.querySelector<HTMLInputElement>(
+      'input[aria-label="Filtrar por categoria Trabalho"]',
+    );
+    expect(trabalho).not.toBeNull();
+    trabalho!.checked = true;
+    trabalho!.dispatchEvent(new Event('change'));
+    harness.detectChanges();
+
+    const singleFilter = httpTesting.expectOne(
+      'http://localhost:5146/notas?categoriaIds=category-1',
+    );
+    expect(singleFilter.request.method).toBe('GET');
+    expect(singleFilter.request.params.getAll('categoriaIds')).toEqual(['category-1']);
+    singleFilter.flush([
+      {
+        id: 'work-note',
+        titulo: 'Nota de trabalho',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [{ id: 'category-1', titulo: 'Trabalho' }],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    const pessoal = harness.routeNativeElement?.querySelector<HTMLInputElement>(
+      'input[aria-label="Filtrar por categoria Pessoal"]',
+    );
+    pessoal!.checked = true;
+    pessoal!.dispatchEvent(new Event('change'));
+    harness.detectChanges();
+
+    const multipleFilters = httpTesting.expectOne(
+      'http://localhost:5146/notas?categoriaIds=category-1&categoriaIds=category-2',
+    );
+    expect(multipleFilters.request.method).toBe('GET');
+    expect(multipleFilters.request.params.getAll('categoriaIds')).toEqual([
+      'category-1',
+      'category-2',
+    ]);
+    multipleFilters.flush([
+      {
+        id: 'and-note',
+        titulo: 'Nota nas duas categorias',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [
+          { id: 'category-1', titulo: 'Trabalho' },
+          { id: 'category-2', titulo: 'Pessoal' },
+        ],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.textContent).toContain('Nota nas duas categorias');
+    expect(trabalho?.checked).toBe(true);
+    expect(pessoal?.checked).toBe(true);
+  });
+
+  it('clears selected categories and lists without query parameters', async () => {
+    const harness = await RouterTestingHarness.create();
+    await abrirNotas(harness);
+    httpTesting.expectOne('http://localhost:5146/notas').flush([]);
+    harness.detectChanges();
+
+    const category = harness.routeNativeElement?.querySelector<HTMLInputElement>(
+      'input[aria-label="Filtrar por categoria Trabalho"]',
+    )!;
+    category.checked = true;
+    category.dispatchEvent(new Event('change'));
+    httpTesting
+      .expectOne('http://localhost:5146/notas?categoriaIds=category-1')
+      .flush([]);
+    harness.detectChanges();
+
+    const clearButton = Array.from(
+      harness.routeNativeElement?.querySelectorAll<HTMLButtonElement>('button') ?? [],
+    ).find((button) => button.textContent?.includes('Limpar filtros'));
+    expect(clearButton).toBeDefined();
+    clearButton?.click();
+    harness.detectChanges();
+
+    const unfiltered = httpTesting.expectOne('http://localhost:5146/notas');
+    expect(unfiltered.request.params.keys()).toEqual([]);
+    unfiltered.flush([]);
+    harness.detectChanges();
+
+    expect(category.checked).toBe(false);
+    expect(harness.routeNativeElement?.textContent).toContain('Nenhuma nota cadastrada');
+    expect(harness.routeNativeElement?.textContent).not.toContain(
+      'Nenhuma nota corresponde aos filtros',
+    );
+  });
+
+  it('shows a filtered empty state distinct from the no-notes state', async () => {
+    const harness = await RouterTestingHarness.create();
+    await abrirNotas(harness);
+    httpTesting.expectOne('http://localhost:5146/notas').flush([]);
+    harness.detectChanges();
+
+    const category = harness.routeNativeElement?.querySelector<HTMLInputElement>(
+      'input[aria-label="Filtrar por categoria Trabalho"]',
+    )!;
+    category.checked = true;
+    category.dispatchEvent(new Event('change'));
+    httpTesting
+      .expectOne('http://localhost:5146/notas?categoriaIds=category-1')
+      .flush([]);
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.textContent).toContain(
+      'Nenhuma nota corresponde aos filtros',
+    );
+    expect(harness.routeNativeElement?.textContent).not.toContain('Nenhuma nota cadastrada');
+  });
+
+  it('retries a failed filtered notes request without clearing selected categories', async () => {
+    const harness = await RouterTestingHarness.create();
+    await abrirNotas(harness);
+    httpTesting.expectOne('http://localhost:5146/notas').flush([]);
+    harness.detectChanges();
+
+    const category = harness.routeNativeElement?.querySelector<HTMLInputElement>(
+      'input[aria-label="Filtrar por categoria Trabalho"]',
+    )!;
+    category.checked = true;
+    category.dispatchEvent(new Event('change'));
+    httpTesting.expectOne('http://localhost:5146/notas?categoriaIds=category-1').flush(
+      { detail: 'internal details' },
+      { status: 500, statusText: 'Internal Server Error' },
+    );
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.textContent).toContain(
+      'Não foi possível carregar as notas.',
+    );
+    expect(harness.routeNativeElement?.textContent).not.toContain('internal details');
+
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button:has(svg[lucideRefreshCw])')
+      ?.click();
+    const retry = httpTesting.expectOne(
+      'http://localhost:5146/notas?categoriaIds=category-1',
+    );
+    expect(retry.request.params.getAll('categoriaIds')).toEqual(['category-1']);
+    retry.flush([]);
+    harness.detectChanges();
+
+    expect(category.checked).toBe(true);
+    expect(harness.routeNativeElement?.textContent).toContain(
+      'Nenhuma nota corresponde aos filtros',
+    );
+  });
+
+  it('ignores stale note responses when category selections change quickly', async () => {
+    const harness = await RouterTestingHarness.create();
+    await abrirNotas(harness);
+    httpTesting.expectOne('http://localhost:5146/notas').flush([]);
+    harness.detectChanges();
+
+    const trabalho = harness.routeNativeElement?.querySelector<HTMLInputElement>(
+      'input[aria-label="Filtrar por categoria Trabalho"]',
+    )!;
+    trabalho.checked = true;
+    trabalho.dispatchEvent(new Event('change'));
+    const firstRequest = httpTesting.expectOne(
+      'http://localhost:5146/notas?categoriaIds=category-1',
+    );
+
+    const pessoal = harness.routeNativeElement?.querySelector<HTMLInputElement>(
+      'input[aria-label="Filtrar por categoria Pessoal"]',
+    )!;
+    pessoal.checked = true;
+    pessoal.dispatchEvent(new Event('change'));
+    const latestRequest = httpTesting.expectOne(
+      'http://localhost:5146/notas?categoriaIds=category-1&categoriaIds=category-2',
+    );
+
+    latestRequest.flush([
+      {
+        id: 'latest-note',
+        titulo: 'Resultado mais recente',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+    firstRequest.flush([
+      {
+        id: 'stale-note',
+        titulo: 'Resultado antigo',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.textContent).toContain('Resultado mais recente');
+    expect(harness.routeNativeElement?.textContent).not.toContain('Resultado antigo');
+    expect(trabalho.checked).toBe(true);
+    expect(pessoal.checked).toBe(true);
+  });
+
+  it('preserves selected filters after status updates and deletion', async () => {
+    const harness = await RouterTestingHarness.create();
+    await abrirNotas(harness);
+    httpTesting.expectOne('http://localhost:5146/notas').flush([]);
+    harness.detectChanges();
+
+    const category = harness.routeNativeElement?.querySelector<HTMLInputElement>(
+      'input[aria-label="Filtrar por categoria Trabalho"]',
+    )!;
+    category.checked = true;
+    category.dispatchEvent(new Event('change'));
+    httpTesting.expectOne('http://localhost:5146/notas?categoriaIds=category-1').flush([
+      {
+        id: 'filtered-note',
+        titulo: 'Nota filtrada',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [{ id: 'category-1', titulo: 'Trabalho' }],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    Array.from(harness.routeNativeElement?.querySelectorAll<HTMLButtonElement>('button') ?? [])
+      .find((button) => button.textContent?.trim() === 'Arquivar')
+      ?.click();
+    const update = httpTesting.expectOne('http://localhost:5146/notas/filtered-note');
+    update.flush({
+      id: 'filtered-note',
+      titulo: 'Nota filtrada',
+      descricao: null,
+      status: 'Arquivada',
+      categorias: [{ id: 'category-1', titulo: 'Trabalho' }],
+      criadoEm: '2026-10-28T15:00:00Z',
+      atualizadoEm: '2026-10-28T17:00:00Z',
+    });
+    harness.detectChanges();
+    expect(category.checked).toBe(true);
+    expect(harness.routeNativeElement?.textContent).toContain('Arquivada');
+
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir nota Nota filtrada"]')
+      ?.click();
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('[role="alertdialog"] button:last-child')
+      ?.click();
+    httpTesting.expectOne('http://localhost:5146/notas/filtered-note').flush(null, {
+      status: 204,
+      statusText: 'No Content',
+    });
+    harness.detectChanges();
+
+    expect(category.checked).toBe(true);
+    expect(harness.routeNativeElement?.textContent).toContain(
+      'Nenhuma nota corresponde aos filtros',
+    );
+  });
+
+  it('shows loading then displays notes, descriptions, categories and statuses in API order', async () => {
+    const harness = await RouterTestingHarness.create();
+    await abrirNotas(harness);
 
     const request = httpTesting.expectOne('http://localhost:5146/notas');
     expect(request.request.method).toBe('GET');
@@ -95,7 +413,7 @@ describe('NotesPage', () => {
 
   it('shows a clear empty state when the API returns no notes', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
 
     httpTesting.expectOne('http://localhost:5146/notas').flush([]);
     harness.detectChanges();
@@ -105,7 +423,7 @@ describe('NotesPage', () => {
 
   it('shows a friendly error and retries the notes request', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
 
     httpTesting.expectOne('http://localhost:5146/notas').flush(
       { title: 'Erro interno', detail: 'internal details' },
@@ -132,7 +450,7 @@ describe('NotesPage', () => {
 
   it('opens an accessible confirmation for the selected note and cancel does not call the API', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
     httpTesting.expectOne('http://localhost:5146/notas').flush([
       {
         id: 'first-id',
@@ -184,7 +502,7 @@ describe('NotesPage', () => {
 
   it('confirms deletion with the selected ID and removes the note on HTTP 204', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
     httpTesting.expectOne('http://localhost:5146/notas').flush([
       {
         id: 'first-id',
@@ -237,7 +555,7 @@ describe('NotesPage', () => {
 
   it('shows the empty state after deleting the last note', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
     httpTesting.expectOne('http://localhost:5146/notas').flush([
       {
         id: 'only-note',
@@ -270,7 +588,7 @@ describe('NotesPage', () => {
 
   it('prevents duplicate confirmations and selecting another note during deletion', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
     httpTesting.expectOne('http://localhost:5146/notas').flush([
       {
         id: 'first-id',
@@ -315,7 +633,7 @@ describe('NotesPage', () => {
 
   it('removes a note from the list and reports when it was already unavailable', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
     httpTesting.expectOne('http://localhost:5146/notas').flush([
       {
         id: 'note-id',
@@ -350,7 +668,7 @@ describe('NotesPage', () => {
 
   it('keeps the confirmation open after a network failure and allows retrying', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
     httpTesting.expectOne('http://localhost:5146/notas').flush([
       {
         id: 'note-id',
@@ -395,7 +713,7 @@ describe('NotesPage', () => {
 
   it('keeps the confirmation open with a friendly message after an unexpected error', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
     httpTesting.expectOne('http://localhost:5146/notas').flush([
       {
         id: 'note-id',
@@ -437,7 +755,7 @@ describe('NotesPage', () => {
     '$action sends the complete note payload and updates only after success',
     async ({ initialStatus, newStatus, action }) => {
       const harness = await RouterTestingHarness.create();
-      await harness.navigateByUrl('/app/notas');
+      await abrirNotas(harness);
       httpTesting.expectOne('http://localhost:5146/notas').flush([
         {
           id: 'note-id',
@@ -511,7 +829,7 @@ describe('NotesPage', () => {
 
   it('sends an empty category list when archiving a note without categories', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
     httpTesting.expectOne('http://localhost:5146/notas').flush([
       {
         id: 'note-id',
@@ -549,7 +867,7 @@ describe('NotesPage', () => {
 
   it('prevents duplicate status updates for the same note', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
     httpTesting.expectOne('http://localhost:5146/notas').flush([
       {
         id: 'note-id',
@@ -593,7 +911,7 @@ describe('NotesPage', () => {
     },
   ])('offers a list refresh after HTTP $status', async ({ status, message }) => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
     httpTesting.expectOne('http://localhost:5146/notas').flush([
       {
         id: 'note-id',
@@ -638,7 +956,7 @@ describe('NotesPage', () => {
 
   it('shows a friendly network error and allows retrying the status update', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
     httpTesting.expectOne('http://localhost:5146/notas').flush([
       {
         id: 'note-id',
@@ -683,7 +1001,7 @@ describe('NotesPage', () => {
 
   it('formats valid update dates and handles malformed dates safely', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
 
     httpTesting.expectOne('http://localhost:5146/notas').flush([
       {
@@ -703,7 +1021,7 @@ describe('NotesPage', () => {
 
   it('navigates back to workspace', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
     httpTesting.expectOne('http://localhost:5146/notas').flush([]);
     harness.detectChanges();
 
@@ -715,7 +1033,7 @@ describe('NotesPage', () => {
 
   it('provides working links for creating and editing notes', async () => {
     const harness = await RouterTestingHarness.create();
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
     httpTesting.expectOne('http://localhost:5146/notas').flush([
       {
         id: 'note-id',
@@ -736,7 +1054,7 @@ describe('NotesPage', () => {
     expect(TestBed.inject(Router).url).toBe('/app/notas/nova');
     httpTesting.expectOne('http://localhost:5146/categorias').flush([]);
 
-    await harness.navigateByUrl('/app/notas');
+    await abrirNotas(harness);
     httpTesting.expectOne('http://localhost:5146/notas').flush([
       {
         id: 'note-id',

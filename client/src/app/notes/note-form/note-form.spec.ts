@@ -123,6 +123,7 @@ describe('NoteForm', () => {
   }
 
   function expectNotesReload(): void {
+    httpTesting.expectOne('http://localhost:5146/categorias').flush(categories);
     httpTesting.expectOne('http://localhost:5146/notas').flush([]);
   }
 
@@ -379,6 +380,7 @@ describe('NoteForm', () => {
 
     expect(TestBed.inject(Router).url).toBe('/app/notas');
     httpTesting.expectNone('POST http://localhost:5146/notas');
+    httpTesting.expectOne('http://localhost:5146/categorias').flush(categories);
     httpTesting.expectOne('http://localhost:5146/notas').flush([]);
   });
 });
