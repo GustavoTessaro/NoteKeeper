@@ -2,6 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { routes } from '../../app.routes';
 import { AuthStateService } from '../auth-state.service';
@@ -132,5 +133,53 @@ describe('Login', () => {
     expect(fixture.nativeElement.querySelector('button[type="submit"]').disabled).toBe(true);
 
     request.flush(validToken);
+  });
+
+  it('navigates to a safe internal returnUrl after login', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/login?returnUrl=%2Fapp%3Ftab%3Dnotes');
+
+    const routeElement = harness.routeNativeElement as HTMLElement;
+    const email = routeElement.querySelector('#email') as HTMLInputElement;
+    email.value = 'ana@example.com';
+    email.dispatchEvent(new Event('input'));
+    const password = routeElement.querySelector('#password') as HTMLInputElement;
+    password.value = 'correct-password';
+    password.dispatchEvent(new Event('input'));
+    routeElement.querySelector('form')?.dispatchEvent(
+      new Event('submit', { bubbles: true, cancelable: true }),
+    );
+
+    httpTesting.expectOne('http://localhost:5146/auth/login').flush(validToken);
+    await harness.fixture.whenStable();
+
+    expect(TestBed.inject(Router).url).toBe('/app?tab=notes');
+  });
+
+  it.each([
+    'https:%2F%2Fevil.example',
+    '%2F%2Fevil.example',
+    '%2Fapp%5C%5Cevil.example',
+    '%2Fapp%2F%2Fnotes',
+    '%2Foutside',
+  ])('falls back to /app for an unsafe returnUrl (%s)', async (returnUrl) => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl(`/login?returnUrl=${returnUrl}`);
+
+    const routeElement = harness.routeNativeElement as HTMLElement;
+    const email = routeElement.querySelector('#email') as HTMLInputElement;
+    email.value = 'ana@example.com';
+    email.dispatchEvent(new Event('input'));
+    const password = routeElement.querySelector('#password') as HTMLInputElement;
+    password.value = 'correct-password';
+    password.dispatchEvent(new Event('input'));
+    routeElement.querySelector('form')?.dispatchEvent(
+      new Event('submit', { bubbles: true, cancelable: true }),
+    );
+
+    httpTesting.expectOne('http://localhost:5146/auth/login').flush(validToken);
+    await harness.fixture.whenStable();
+
+    expect(TestBed.inject(Router).url).toBe('/app');
   });
 });

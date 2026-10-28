@@ -120,9 +120,9 @@ import { LoginRequest } from '../auth.models';
 export class Login {
   private readonly authApi = inject(AuthApiService);
   private readonly authState = inject(AuthStateService);
+  private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  protected readonly cadastroSucesso =
-    inject(ActivatedRoute).snapshot.queryParamMap.get('cadastro') === 'sucesso';
+  protected readonly cadastroSucesso = this.route.snapshot.queryParamMap.get('cadastro') === 'sucesso';
 
   private readonly model = signal<LoginRequest>({ email: '', senha: '' });
   protected readonly loginForm = form(this.model, (path) => {
@@ -183,7 +183,7 @@ export class Login {
             return;
           }
 
-          void this.router.navigateByUrl('/app');
+          void this.router.navigateByUrl(this.safeReturnUrl() ?? '/app');
         },
         error: (error: unknown) => {
           this.mensagemErro.set(
@@ -193,5 +193,34 @@ export class Login {
           );
         },
       });
+  }
+
+  private safeReturnUrl(): string | null {
+    const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
+
+    if (
+      !returnUrl ||
+      !returnUrl.startsWith('/app') ||
+      returnUrl.startsWith('//') ||
+      returnUrl.includes('\\') ||
+      /[\u0000-\u001f\u007f]/.test(returnUrl)
+    ) {
+      return null;
+    }
+
+    try {
+      const target = new URL(returnUrl, window.location.origin);
+      if (
+        target.origin !== window.location.origin ||
+        (target.pathname !== '/app' && !target.pathname.startsWith('/app/')) ||
+        target.pathname.includes('//')
+      ) {
+        return null;
+      }
+
+      return `${target.pathname}${target.search}${target.hash}`;
+    } catch {
+      return null;
+    }
   }
 }
