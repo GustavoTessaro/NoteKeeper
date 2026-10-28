@@ -100,6 +100,17 @@ describe('app routes', () => {
     expect(TestBed.inject(Router).url).toBe('/login?returnUrl=%2Fapp%2Fcategorias');
   });
 
+  it.each(['/app/categorias/nova', '/app/categorias/category-id/editar'])(
+    'redirects unauthenticated users from category form route %s to login',
+    async (url) => {
+      const harness = await RouterTestingHarness.create();
+
+      await harness.navigateByUrl(url);
+
+      expect(TestBed.inject(Router).url).toBe(`/login?returnUrl=${encodeURIComponent(url)}`);
+    },
+  );
+
   it('redirects the root and unknown paths to /login', async () => {
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/');

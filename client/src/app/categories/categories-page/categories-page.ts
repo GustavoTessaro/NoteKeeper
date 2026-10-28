@@ -1,13 +1,13 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { LucideArrowLeft, LucideRefreshCw, LucideTags } from '@lucide/angular';
+import { LucideArrowLeft, LucidePencil, LucidePlus, LucideRefreshCw, LucideTags } from '@lucide/angular';
 import { CategoriaDto } from '../category.models';
 import { CategoriesApiService } from '../categories-api.service';
 
 type CategoriesPageState = 'loading' | 'loaded' | 'empty' | 'error';
 
 @Component({
-  imports: [LucideArrowLeft, LucideRefreshCw, LucideTags, RouterLink],
+  imports: [LucideArrowLeft, LucidePencil, LucidePlus, LucideRefreshCw, LucideTags, RouterLink],
   selector: 'app-categories-page',
   template: `
     <main class="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 sm:py-12">
@@ -32,7 +32,17 @@ type CategoriesPageState = 'loading' | 'loaded' | 'empty' | 'error';
           </a>
         </header>
 
-        <section class="mt-8" aria-live="polite" aria-busy="{{ estado() === 'loading' }}">
+        <div class="mt-8 flex justify-end">
+          <a
+            routerLink="/app/categorias/nova"
+            class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          >
+            <svg lucidePlus aria-hidden="true" class="size-4"></svg>
+            <span>Nova categoria</span>
+          </a>
+        </div>
+
+        <section class="mt-4" aria-live="polite" [attr.aria-busy]="estado() === 'loading'">
           @switch (estado()) {
             @case ('loading') {
               <div class="flex items-center gap-3 rounded-xl bg-slate-50 p-5 text-slate-600">
@@ -63,8 +73,16 @@ type CategoriesPageState = 'loading' | 'loaded' | 'empty' | 'error';
             @case ('loaded') {
               <ul class="grid gap-3 sm:grid-cols-2" aria-label="Lista de categorias">
                 @for (categoria of categorias(); track categoria.id) {
-                  <li class="rounded-xl border border-slate-200 bg-white p-4 text-slate-800 shadow-sm">
+                  <li class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 text-slate-800 shadow-sm">
                     <span class="font-medium">{{ categoria.titulo }}</span>
+                    <a
+                      [routerLink]="['/app/categorias', categoria.id, 'editar']"
+                      [attr.aria-label]="'Editar categoria ' + categoria.titulo"
+                      class="inline-flex shrink-0 items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                    >
+                      <svg lucidePencil aria-hidden="true" class="size-4"></svg>
+                      <span>Editar</span>
+                    </a>
                   </li>
                 }
               </ul>

@@ -29,6 +29,20 @@ export const routes: Routes = [
             (component) => component.CategoriesPage,
           ),
       },
+      {
+        path: 'categorias/nova',
+        loadComponent: () =>
+          import('./categories/category-form/category-form').then(
+            (component) => component.CategoryForm,
+          ),
+      },
+      {
+        path: 'categorias/:id/editar',
+        loadComponent: () =>
+          import('./categories/category-form/category-form').then(
+            (component) => component.CategoryForm,
+          ),
+      },
     ],
   },
   {

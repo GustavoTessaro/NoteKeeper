@@ -61,7 +61,7 @@ describe('CategoriesPage', () => {
     request.flush(categories);
     harness.detectChanges();
 
-    const items = harness.routeNativeElement?.querySelectorAll('li');
+    const items = harness.routeNativeElement?.querySelectorAll('li > span');
     expect(harness.routeNativeElement?.textContent).toContain('Pessoal');
     expect(harness.routeNativeElement?.textContent).toContain('Trabalho');
     expect(Array.from(items ?? []).map((item) => item.textContent?.trim())).toEqual([
@@ -119,5 +119,35 @@ describe('CategoriesPage', () => {
     await harness.fixture.whenStable();
 
     expect(TestBed.inject(Router).url).toBe('/app');
+  });
+
+  it('provides working links for creating and editing categories', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/categorias');
+    httpTesting
+      .expectOne('http://localhost:5146/categorias')
+      .flush([{ id: 'category-id', titulo: 'Trabalho' }]);
+    harness.detectChanges();
+
+    harness.routeNativeElement
+      ?.querySelector<HTMLAnchorElement>('a[href="/app/categorias/nova"]')
+      ?.click();
+    await harness.fixture.whenStable();
+    expect(TestBed.inject(Router).url).toBe('/app/categorias/nova');
+
+    await harness.navigateByUrl('/app/categorias');
+    httpTesting
+      .expectOne('http://localhost:5146/categorias')
+      .flush([{ id: 'category-id', titulo: 'Trabalho' }]);
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLAnchorElement>('a[href="/app/categorias/category-id/editar"]')
+      ?.click();
+    await harness.fixture.whenStable();
+    expect(TestBed.inject(Router).url).toBe('/app/categorias/category-id/editar');
+    httpTesting.expectOne('http://localhost:5146/categorias/category-id').flush({
+      id: 'category-id',
+      titulo: 'Trabalho',
+    });
   });
 });
