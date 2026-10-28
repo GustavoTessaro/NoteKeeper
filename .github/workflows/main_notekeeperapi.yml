@@ -23,17 +23,20 @@ jobs:
         with:
           dotnet-version: '10.x'
 
+      - name: Restore with dotnet
+        run: dotnet restore server/src/Api/NoteKeeper.Api.csproj
+
       - name: Build with dotnet
-        run: dotnet build --configuration Release
+        run: dotnet build server/src/Api/NoteKeeper.Api.csproj --configuration Release --no-restore
 
       - name: dotnet publish
-        run: dotnet publish -c Release -o "${{env.DOTNET_ROOT}}/myapp"
+        run: dotnet publish server/src/Api/NoteKeeper.Api.csproj --configuration Release --no-build --no-restore --output "${{ github.workspace }}/artifacts/api-publish"
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: .net-app
-          path: ${{env.DOTNET_ROOT}}/myapp
+          path: ${{ github.workspace }}/artifacts/api-publish
 
   deploy:
     runs-on: windows-latest
