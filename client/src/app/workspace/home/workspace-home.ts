@@ -51,7 +51,7 @@ import { AuthStateService } from '../../auth/auth-state.service';
             <span>Gerenciar categorias</span>
           </a>
         </nav>
-        <p class="mt-6 text-slate-600">A área principal da aplicação será construída nas próximas etapas.</p>
+        <p class="mt-6 text-slate-600">Organize suas notas e categorias em um só lugar.</p>
       </section>
     </main>
   `,

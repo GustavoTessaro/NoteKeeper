@@ -44,6 +44,22 @@ describe('WorkspaceHome', () => {
     TestBed.resetTestingModule();
   });
 
+  it('shows the workspace introduction and preserves its navigation and user details', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app', WorkspaceHome);
+    const element = harness.routeNativeElement as HTMLElement;
+
+    expect(element.textContent).toContain('Olá, Ana.');
+    expect(element.textContent).toContain('ana@example.com');
+    expect(element.textContent).toContain('Organize suas notas e categorias em um só lugar.');
+    expect(element.textContent).not.toContain('será construída nas próximas etapas');
+    expect(element.querySelector('a[href="/app/notas"]')?.textContent).toContain('Gerenciar notas');
+    expect(element.querySelector('a[href="/app/categorias"]')?.textContent).toContain(
+      'Gerenciar categorias',
+    );
+    expect(element.querySelector('button')?.textContent).toContain('Sair');
+  });
+
   it('shows the signed-in user and logs out before clearing the session', async () => {
     const harness = await RouterTestingHarness.create();
     const component = await harness.navigateByUrl('/app', WorkspaceHome);
