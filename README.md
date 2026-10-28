@@ -38,20 +38,39 @@ O projeto foi desenvolvido como atividade da **Academia do Programador**, integr
 
 ---
 
+
 ## 🖼️ Demonstração
 
 <details>
-<summary><strong>📸 Ver sugestões de capturas para a documentação</strong></summary>
+<summary><strong>📸 Clique aqui para visualizar as telas do NoteKeeper</strong></summary>
 
-![Tela de login do NoteKeeper](docs/screenshots/login.png)
-![Tela de Cadastro](docs/screenshots/cadastro.png)
-![Tela deWorkspace](docs/screenshots/workspace.png)
-![Tela de Listagem de notas](docs/screenshots/notas.png)
-![Tela de Criação/edição de nota](docs/screenshots/formulario-nota.png)
-![Tela de Categorias](docs/screenshots/categorias.png)
-![Tela de Criação/edição de categoria](docs/screenshots/formulario-categoria.png)
+### 🔐 Tela de Login
+![Tela de Login do NoteKeeper](docs/screenshots/login.PNG)
+
+### 📝 Cadastro de Usuário
+![Tela de Cadastro](docs/screenshots/cadastro.PNG)
+
+### 🏠 Workspace
+![Tela do Workspace](docs/screenshots/workspace.PNG)
+
+### 📋 Gerenciamento de Notas
+![Tela de Listagem de Notas](docs/screenshots/notas.PNG)
+
+### ✏️ Criação e Edição de Notas
+![Formulário de Nota](docs/screenshots/formulario-nota.PNG)
+
+### 🗂️ Gerenciamento de Categorias
+![Tela de Categorias](docs/screenshots/categorias.PNG)
+
+### ➕ Criação e Edição de Categorias
+![Formulário de Categoria](docs/screenshots/formulario-categoria.PNG)
 
 </details>
+
+**Experimente online:** [Abrir o NoteKeeper](https://red-ocean-0e030690f.4.azurestaticapps.net/)
+
+> O banco de dados utiliza uma modalidade de Azure SQL que pode suspender o processamento após um período de inatividade. Por isso, a primeira operação após uma pausa pode levar mais tempo que as seguintes.
+
 
 **Experimente online:** [Abrir o NoteKeeper](https://red-ocean-0e030690f.4.azurestaticapps.net/)
 
