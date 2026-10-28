@@ -11,6 +11,7 @@ import { AuthStateService } from './auth/auth-state.service';
 import { WorkspaceHome } from './workspace/home/workspace-home';
 import { CategoriesPage } from './categories/categories-page/categories-page';
 import { NotesPage } from './notes/notes-page/notes-page';
+import { NoteForm } from './notes/note-form/note-form';
 
 describe('app routes', () => {
   beforeEach(() => {
@@ -96,6 +97,52 @@ describe('app routes', () => {
 
     expect(TestBed.inject(Router).url).toBe('/login?returnUrl=%2Fapp%2Fnotas');
   });
+
+  it.each(['/app/notas/nova', '/app/notas/note-id/editar'])(
+    'redirects unauthenticated users from note form route %s to login',
+    async (url) => {
+      const harness = await RouterTestingHarness.create();
+
+      await harness.navigateByUrl(url);
+
+      expect(TestBed.inject(Router).url).toBe(`/login?returnUrl=${encodeURIComponent(url)}`);
+    },
+  );
+
+  it.each(['/app/notas/nova', '/app/notas/note-id/editar'])(
+    'loads protected note form route %s with a valid session',
+    async (url) => {
+      TestBed.inject(AuthStateService).iniciarSessao({
+        usuarioId: 'user-id',
+        nome: 'Ana',
+        email: 'ana@example.com',
+        accessToken: 'access-token',
+        dataExpiracaoEmUtc: '2099-01-01T00:00:00Z',
+      });
+
+      const harness = await RouterTestingHarness.create();
+      const component = await harness.navigateByUrl(url, NoteForm);
+
+      expect(component).toBeInstanceOf(NoteForm);
+      TestBed.inject(HttpTestingController)
+        .expectOne('http://localhost:5146/categorias')
+        .flush([]);
+
+      if (url.includes('/editar')) {
+        TestBed.inject(HttpTestingController)
+          .expectOne('http://localhost:5146/notas/note-id')
+          .flush({
+            id: 'note-id',
+            titulo: 'Nota',
+            descricao: null,
+            status: 'Ativa',
+            categorias: [],
+            criadoEm: '2026-10-28T15:00:00Z',
+            atualizadoEm: '2026-10-28T16:00:00Z',
+          });
+      }
+    },
+  );
 
   it('navigates from workspace to categories using the visible link', async () => {
     TestBed.inject(AuthStateService).iniciarSessao({

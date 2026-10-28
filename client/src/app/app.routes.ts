@@ -48,6 +48,16 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./notes/notes-page/notes-page').then((component) => component.NotesPage),
       },
+      {
+        path: 'notas/nova',
+        loadComponent: () =>
+          import('./notes/note-form/note-form').then((component) => component.NoteForm),
+      },
+      {
+        path: 'notas/:id/editar',
+        loadComponent: () =>
+          import('./notes/note-form/note-form').then((component) => component.NoteForm),
+      },
     ],
   },
   {

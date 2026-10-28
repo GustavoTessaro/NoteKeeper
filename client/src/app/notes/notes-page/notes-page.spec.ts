@@ -161,4 +161,57 @@ describe('NotesPage', () => {
 
     expect(TestBed.inject(Router).url).toBe('/app');
   });
+
+  it('provides working links for creating and editing notes', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/notas');
+    httpTesting.expectOne('http://localhost:5146/notas').flush([
+      {
+        id: 'note-id',
+        titulo: 'Nota de teste',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    harness.routeNativeElement
+      ?.querySelector<HTMLAnchorElement>('a[href="/app/notas/nova"]')
+      ?.click();
+    await harness.fixture.whenStable();
+    expect(TestBed.inject(Router).url).toBe('/app/notas/nova');
+    httpTesting.expectOne('http://localhost:5146/categorias').flush([]);
+
+    await harness.navigateByUrl('/app/notas');
+    httpTesting.expectOne('http://localhost:5146/notas').flush([
+      {
+        id: 'note-id',
+        titulo: 'Nota de teste',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLAnchorElement>('a[href="/app/notas/note-id/editar"]')
+      ?.click();
+    await harness.fixture.whenStable();
+    expect(TestBed.inject(Router).url).toBe('/app/notas/note-id/editar');
+    httpTesting.expectOne('http://localhost:5146/categorias').flush([]);
+    httpTesting.expectOne('http://localhost:5146/notas/note-id').flush({
+      id: 'note-id',
+      titulo: 'Nota de teste',
+      descricao: null,
+      status: 'Ativa',
+      categorias: [],
+      criadoEm: '2026-10-28T15:00:00Z',
+      atualizadoEm: '2026-10-28T16:00:00Z',
+    });
+  });
 });

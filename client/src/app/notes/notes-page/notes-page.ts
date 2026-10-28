@@ -1,13 +1,26 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { LucideArrowLeft, LucideNotebookPen, LucideRefreshCw } from '@lucide/angular';
+import {
+  LucideArrowLeft,
+  LucideNotebookPen,
+  LucidePencil,
+  LucidePlus,
+  LucideRefreshCw,
+} from '@lucide/angular';
 import { NotaDto } from '../note.models';
 import { NotesApiService } from '../notes-api.service';
 
 type NotesPageState = 'loading' | 'loaded' | 'empty' | 'error';
 
 @Component({
-  imports: [LucideArrowLeft, LucideNotebookPen, LucideRefreshCw, RouterLink],
+  imports: [
+    LucideArrowLeft,
+    LucideNotebookPen,
+    LucidePencil,
+    LucidePlus,
+    LucideRefreshCw,
+    RouterLink,
+  ],
   selector: 'app-notes-page',
   template: `
     <main class="min-h-screen bg-slate-50 px-4 py-8 sm:px-6 sm:py-12">
@@ -31,6 +44,16 @@ type NotesPageState = 'loading' | 'loaded' | 'empty' | 'error';
             <span>Voltar ao workspace</span>
           </a>
         </header>
+
+        <div class="mt-8 flex justify-end">
+          <a
+            routerLink="/app/notas/nova"
+            class="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          >
+            <svg lucidePlus aria-hidden="true" class="size-4"></svg>
+            <span>Nova nota</span>
+          </a>
+        </div>
 
         <section class="mt-8" aria-live="polite" [attr.aria-busy]="estado() === 'loading'">
           @switch (estado()) {
@@ -94,6 +117,14 @@ type NotesPageState = 'loading' | 'loaded' | 'empty' | 'error';
                       Atualizada em
                       <time [attr.datetime]="nota.atualizadoEm">{{ dataAtualizacao(nota.atualizadoEm) }}</time>
                     </p>
+                    <a
+                      [routerLink]="['/app/notas', nota.id, 'editar']"
+                      [attr.aria-label]="'Editar nota ' + nota.titulo"
+                      class="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+                    >
+                      <svg lucidePencil aria-hidden="true" class="size-4"></svg>
+                      <span>Editar</span>
+                    </a>
                   </li>
                 }
               </ul>
