@@ -150,4 +150,156 @@ describe('CategoriesPage', () => {
       titulo: 'Trabalho',
     });
   });
+
+  it('opens an accessible confirmation for the selected category and cancellation makes no request', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/categorias');
+    httpTesting.expectOne('http://localhost:5146/categorias').flush([
+      { id: 'first-id', titulo: 'Pessoal' },
+      { id: 'second-id', titulo: 'Trabalho' },
+    ]);
+    harness.detectChanges();
+
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir categoria Trabalho"]')
+      ?.click();
+    harness.detectChanges();
+
+    const dialog = harness.routeNativeElement?.querySelector('[role="alertdialog"]');
+    expect(dialog?.getAttribute('aria-modal')).toBe('true');
+    expect(dialog?.getAttribute('aria-labelledby')).toBe('delete-category-title');
+    expect(dialog?.textContent).toContain('Trabalho');
+    expect(dialog?.textContent).toContain('As notas não serão excluídas');
+    expect(dialog?.textContent).toContain('deixarão de estar associadas');
+
+    dialog?.querySelector<HTMLButtonElement>('button')?.click();
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(harness.routeNativeElement?.textContent).toContain('Pessoal');
+    httpTesting.expectNone('http://localhost:5146/categorias/second-id');
+  });
+
+  it('confirms deletion with the selected ID and removes the item from the list', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/categorias');
+    httpTesting.expectOne('http://localhost:5146/categorias').flush([
+      { id: 'first-id', titulo: 'Pessoal' },
+      { id: 'second-id', titulo: 'Trabalho' },
+    ]);
+    harness.detectChanges();
+
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir categoria Trabalho"]')
+      ?.click();
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('[role="alertdialog"] button:last-child')
+      ?.click();
+    harness.detectChanges();
+
+    const request = httpTesting.expectOne('http://localhost:5146/categorias/second-id');
+    expect(request.request.method).toBe('DELETE');
+    expect(harness.routeNativeElement?.textContent).toContain('Excluindo...');
+    request.flush(null, { status: 204, statusText: 'No Content' });
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.textContent).toContain('Pessoal');
+    expect(harness.routeNativeElement?.textContent).not.toContain('Trabalho');
+    expect(harness.routeNativeElement?.querySelector('[role="alertdialog"]')).toBeNull();
+  });
+
+  it('blocks duplicate confirmations and other category deletion while a request is pending', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/categorias');
+    httpTesting.expectOne('http://localhost:5146/categorias').flush([
+      { id: 'first-id', titulo: 'Pessoal' },
+      { id: 'second-id', titulo: 'Trabalho' },
+    ]);
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir categoria Pessoal"]')
+      ?.click();
+    harness.detectChanges();
+
+    const dialog = harness.routeNativeElement?.querySelector('[role="alertdialog"]');
+    const confirmButton = dialog?.querySelector<HTMLButtonElement>('button:last-child');
+    confirmButton?.click();
+    harness.detectChanges();
+    confirmButton?.click();
+    harness.detectChanges();
+
+    const request = httpTesting.expectOne('http://localhost:5146/categorias/first-id');
+    expect(
+      harness.routeNativeElement
+        ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir categoria Trabalho"]')
+        ?.disabled,
+    ).toBe(true);
+    httpTesting.expectNone('http://localhost:5146/categorias/second-id');
+    request.flush(null, { status: 204, statusText: 'No Content' });
+    harness.detectChanges();
+  });
+
+  it('removes a category from the displayed list when the API returns 404', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/categorias');
+    httpTesting
+      .expectOne('http://localhost:5146/categorias')
+      .flush([{ id: 'category-id', titulo: 'Trabalho' }]);
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir categoria Trabalho"]')
+      ?.click();
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('[role="alertdialog"] button:last-child')
+      ?.click();
+
+    httpTesting.expectOne('http://localhost:5146/categorias/category-id').flush(
+      { title: 'Recurso não encontrado' },
+      { status: 404, statusText: 'Not Found' },
+    );
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.textContent).toContain(
+      'A categoria não foi encontrada ou já havia sido removida.',
+    );
+    expect(harness.routeNativeElement?.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(harness.routeNativeElement?.textContent).not.toContain('Trabalho');
+  });
+
+  it('keeps the category available and permits retry after a network failure', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/categorias');
+    httpTesting
+      .expectOne('http://localhost:5146/categorias')
+      .flush([{ id: 'category-id', titulo: 'Trabalho' }]);
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir categoria Trabalho"]')
+      ?.click();
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('[role="alertdialog"] button:last-child')
+      ?.click();
+
+    httpTesting
+      .expectOne('http://localhost:5146/categorias/category-id')
+      .error(new ProgressEvent('error'));
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.textContent).toContain(
+      'Não foi possível excluir a categoria. Verifique sua conexão e tente novamente.',
+    );
+    expect(harness.routeNativeElement?.textContent).toContain('Trabalho');
+
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('[role="alertdialog"] button:last-child')
+      ?.click();
+    const retry = httpTesting.expectOne('http://localhost:5146/categorias/category-id');
+    retry.flush(null, { status: 204, statusText: 'No Content' });
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.textContent).not.toContain('Trabalho');
+  });
 });
