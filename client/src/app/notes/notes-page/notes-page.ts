@@ -9,6 +9,8 @@ import {
   LucidePencil,
   LucidePlus,
   LucideRefreshCw,
+  LucideTrash2,
+  LucideX,
 } from '@lucide/angular';
 import { AtualizarNotaRequest, NotaDto, StatusNota } from '../note.models';
 import { NotesApiService } from '../notes-api.service';
@@ -29,6 +31,8 @@ interface NoteOperationError {
     LucidePencil,
     LucidePlus,
     LucideRefreshCw,
+    LucideTrash2,
+    LucideX,
     RouterLink,
   ],
   selector: 'app-notes-page',
@@ -94,7 +98,11 @@ interface NoteOperationError {
               </div>
             }
             @case ('loaded') {
-              <ul class="grid gap-4 md:grid-cols-2" aria-label="Lista de notas">
+              <ul
+                class="grid gap-4 md:grid-cols-2"
+                aria-label="Lista de notas"
+                [attr.inert]="notaParaExcluir() ? '' : null"
+              >
                 @for (nota of notas(); track nota.id) {
                   <li class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                     <div class="flex items-start justify-between gap-3">
@@ -138,7 +146,7 @@ interface NoteOperationError {
                     <button
                       type="button"
                       (click)="alterarStatus(nota, nota.status === 'Ativa' ? 'Arquivada' : 'Ativa')"
-                      [disabled]="emProcessamento(nota.id)"
+                      [disabled]="acoesBloqueadas()"
                       [attr.aria-busy]="emProcessamento(nota.id)"
                       [attr.aria-label]="(nota.status === 'Ativa' ? 'Arquivar' : 'Reativar') + ' nota ' + nota.titulo"
                       class="ml-2 mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
@@ -153,6 +161,16 @@ interface NoteOperationError {
                         <svg lucideArchiveRestore aria-hidden="true" class="size-4"></svg>
                         <span>Reativar</span>
                       }
+                    </button>
+                    <button
+                      type="button"
+                      (click)="solicitarExclusao(nota)"
+                      [disabled]="acoesBloqueadas()"
+                      [attr.aria-label]="'Excluir nota ' + nota.titulo"
+                      class="ml-2 mt-4 inline-flex items-center gap-2 rounded-lg border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <svg lucideTrash2 aria-hidden="true" class="size-4"></svg>
+                      <span>Excluir</span>
                     </button>
                     @if (erroOperacao()[nota.id]; as erro) {
                       <div class="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-900" role="alert">
@@ -175,6 +193,72 @@ interface NoteOperationError {
             }
           }
         </section>
+
+        @if (mensagemStatus(); as mensagem) {
+          <p class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status" aria-live="polite">
+            {{ mensagem }}
+          </p>
+        }
+
+        @if (notaParaExcluir(); as nota) {
+          <div
+            class="fixed inset-0 z-10 flex items-center justify-center bg-slate-950/40 p-4"
+            (click)="fecharConfirmacao($event)"
+          >
+            <section
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="delete-note-title"
+              aria-describedby="delete-note-description delete-note-warning"
+              [attr.aria-busy]="excluindoId() !== null"
+              class="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+              (click)="$event.stopPropagation()"
+            >
+              <h2 id="delete-note-title" class="text-xl font-bold text-slate-900">
+                Excluir nota?
+              </h2>
+              <p id="delete-note-description" class="mt-3 text-slate-700">
+                Confirma a exclusão da nota <strong>{{ nota.titulo }}</strong>?
+              </p>
+              <p id="delete-note-warning" class="mt-2 text-sm text-slate-600">
+                Esta ação é definitiva. A nota e todas as suas associações com categorias serão removidas.
+              </p>
+
+              @if (erroExclusao(); as message) {
+                <p class="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+                  {{ message }}
+                </p>
+              }
+
+              <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  [disabled]="excluindoId() !== null"
+                  (click)="cancelarExclusao()"
+                  class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <svg lucideX aria-hidden="true" class="size-4"></svg>
+                  <span>Cancelar</span>
+                </button>
+                <button
+                  type="button"
+                  [disabled]="excluindoId() !== null"
+                  [attr.aria-busy]="excluindoId() !== null"
+                  (click)="confirmarExclusao()"
+                  class="inline-flex items-center justify-center gap-2 rounded-xl bg-rose-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  @if (excluindoId() !== null) {
+                    <span class="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white" aria-hidden="true"></span>
+                    <span>Excluindo...</span>
+                  } @else {
+                    <svg lucideTrash2 aria-hidden="true" class="size-4"></svg>
+                    <span>Excluir nota</span>
+                  }
+                </button>
+              </div>
+            </section>
+          </div>
+        }
       </section>
     </main>
   `,
@@ -186,6 +270,10 @@ export class NotesPage implements OnInit {
   protected readonly estado = signal<NotesPageState>('loading');
   protected readonly notasEmProcessamento = signal<ReadonlySet<string>>(new Set());
   protected readonly erroOperacao = signal<Readonly<Record<string, NoteOperationError>>>({});
+  protected readonly notaParaExcluir = signal<NotaDto | null>(null);
+  protected readonly excluindoId = signal<string | null>(null);
+  protected readonly erroExclusao = signal<string | null>(null);
+  protected readonly mensagemStatus = signal<string | null>(null);
 
   ngOnInit(): void {
     this.carregar();
@@ -207,8 +295,79 @@ export class NotesPage implements OnInit {
     return this.notasEmProcessamento().has(id);
   }
 
+  protected acoesBloqueadas(): boolean {
+    return this.notaParaExcluir() !== null
+      || this.excluindoId() !== null
+      || this.notasEmProcessamento().size > 0;
+  }
+
+  protected solicitarExclusao(nota: NotaDto): void {
+    if (this.acoesBloqueadas()) {
+      return;
+    }
+
+    this.erroExclusao.set(null);
+    this.mensagemStatus.set(null);
+    this.notaParaExcluir.set(nota);
+  }
+
+  protected fecharConfirmacao(event: MouseEvent): void {
+    if (event.target === event.currentTarget) {
+      this.cancelarExclusao();
+    }
+  }
+
+  protected cancelarExclusao(): void {
+    if (this.excluindoId() !== null) {
+      return;
+    }
+
+    this.notaParaExcluir.set(null);
+    this.erroExclusao.set(null);
+  }
+
+  protected confirmarExclusao(): void {
+    const nota = this.notaParaExcluir();
+    if (!nota || this.excluindoId() !== null) {
+      return;
+    }
+
+    this.erroExclusao.set(null);
+    this.excluindoId.set(nota.id);
+    this.notesApi.excluir(nota.id).subscribe({
+      next: () => {
+        this.notaParaExcluir.set(null);
+        this.removerNota(nota.id);
+        this.mensagemStatus.set(`A nota "${nota.titulo}" foi excluída.`);
+        this.excluindoId.set(null);
+      },
+      error: (error: unknown) => {
+        this.excluindoId.set(null);
+        if (error instanceof HttpErrorResponse && error.status === 404) {
+          this.notaParaExcluir.set(null);
+          this.removerNota(nota.id);
+          this.mensagemStatus.set(
+            `A nota "${nota.titulo}" não está mais disponível. A lista foi atualizada.`,
+          );
+          return;
+        }
+
+        this.erroExclusao.set(
+          error instanceof HttpErrorResponse && error.status === 0
+            ? 'Não foi possível excluir a nota. Verifique sua conexão e tente novamente.'
+            : 'Ocorreu um erro ao excluir a nota. Tente novamente.',
+        );
+      },
+    });
+  }
+
+  private removerNota(id: string): void {
+    this.notas.update((notes) => notes.filter((nota) => nota.id !== id));
+    this.estado.set(this.notas().length === 0 ? 'empty' : 'loaded');
+  }
+
   protected alterarStatus(nota: NotaDto, status: StatusNota): void {
-    if (this.emProcessamento(nota.id)) {
+    if (this.acoesBloqueadas()) {
       return;
     }
 

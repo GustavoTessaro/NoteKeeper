@@ -130,6 +130,306 @@ describe('NotesPage', () => {
     expect(harness.routeNativeElement?.textContent).toContain('Nenhuma nota cadastrada');
   });
 
+  it('opens an accessible confirmation for the selected note and cancel does not call the API', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/notas');
+    httpTesting.expectOne('http://localhost:5146/notas').flush([
+      {
+        id: 'first-id',
+        titulo: 'Nota pessoal',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+      {
+        id: 'second-id',
+        titulo: 'Nota de trabalho',
+        descricao: 'Descrição',
+        status: 'Ativa',
+        categorias: [{ id: 'category-id', titulo: 'Trabalho' }],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir nota Nota de trabalho"]')
+      ?.click();
+    harness.detectChanges();
+
+    const dialog = harness.routeNativeElement?.querySelector('[role="alertdialog"]');
+    expect(dialog?.getAttribute('aria-modal')).toBe('true');
+    expect(dialog?.getAttribute('aria-labelledby')).toBe('delete-note-title');
+    expect(dialog?.getAttribute('aria-describedby')).toBe(
+      'delete-note-description delete-note-warning',
+    );
+    expect(dialog?.textContent).toContain('Nota de trabalho');
+    expect(dialog?.textContent).toContain('Esta ação é definitiva');
+    expect(dialog?.textContent).toContain('nota e todas as suas associações com categorias');
+    expect(
+      harness.routeNativeElement?.querySelector('[aria-label="Lista de notas"]')?.hasAttribute('inert'),
+    ).toBe(true);
+
+    dialog?.querySelector<HTMLButtonElement>('button')?.click();
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(harness.routeNativeElement?.textContent).toContain('Nota pessoal');
+    expect(harness.routeNativeElement?.textContent).toContain('Nota de trabalho');
+    httpTesting.expectNone('http://localhost:5146/notas/second-id');
+  });
+
+  it('confirms deletion with the selected ID and removes the note on HTTP 204', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/notas');
+    httpTesting.expectOne('http://localhost:5146/notas').flush([
+      {
+        id: 'first-id',
+        titulo: 'Nota pessoal',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+      {
+        id: 'second-id',
+        titulo: 'Nota de trabalho',
+        descricao: null,
+        status: 'Arquivada',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir nota Nota de trabalho"]')
+      ?.click();
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('[role="alertdialog"] button:last-child')
+      ?.click();
+    harness.detectChanges();
+
+    const request = httpTesting.expectOne('http://localhost:5146/notas/second-id');
+    expect(request.request.method).toBe('DELETE');
+    expect(harness.routeNativeElement?.textContent).toContain('Excluindo...');
+    expect(
+      harness.routeNativeElement?.querySelector<HTMLButtonElement>(
+        'button[aria-label="Excluir nota Nota pessoal"]',
+      )?.disabled,
+    ).toBe(true);
+    request.flush(null, { status: 204, statusText: 'No Content' });
+    harness.detectChanges();
+
+    expect(
+      Array.from(harness.routeNativeElement?.querySelectorAll('[aria-label="Lista de notas"] h2') ?? [])
+        .map((heading) => heading.textContent?.trim()),
+    ).toEqual(['Nota pessoal']);
+    expect(harness.routeNativeElement?.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(harness.routeNativeElement?.textContent).toContain('foi excluída');
+  });
+
+  it('shows the empty state after deleting the last note', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/notas');
+    httpTesting.expectOne('http://localhost:5146/notas').flush([
+      {
+        id: 'only-note',
+        titulo: 'Única nota',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir nota Única nota"]')
+      ?.click();
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('[role="alertdialog"] button:last-child')
+      ?.click();
+    httpTesting.expectOne('http://localhost:5146/notas/only-note').flush(null, {
+      status: 204,
+      statusText: 'No Content',
+    });
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.textContent).toContain('Nenhuma nota cadastrada');
+    expect(harness.routeNativeElement?.textContent).toContain('foi excluída');
+  });
+
+  it('prevents duplicate confirmations and selecting another note during deletion', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/notas');
+    httpTesting.expectOne('http://localhost:5146/notas').flush([
+      {
+        id: 'first-id',
+        titulo: 'Nota um',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+      {
+        id: 'second-id',
+        titulo: 'Nota dois',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir nota Nota um"]')
+      ?.click();
+    harness.detectChanges();
+    const dialog = harness.routeNativeElement?.querySelector('[role="alertdialog"]');
+    const confirmButton = dialog?.querySelector<HTMLButtonElement>('button:last-child');
+    const cancelButton = dialog?.querySelector<HTMLButtonElement>('button:first-child');
+    confirmButton?.click();
+    harness.detectChanges();
+    confirmButton?.click();
+    cancelButton?.click();
+
+    const request = httpTesting.expectOne('http://localhost:5146/notas/first-id');
+    expect(harness.routeNativeElement?.querySelector('[role="alertdialog"]')?.textContent)
+      .toContain('Nota um');
+    httpTesting.expectNone('http://localhost:5146/notas/second-id');
+    request.flush(null, { status: 204, statusText: 'No Content' });
+    harness.detectChanges();
+  });
+
+  it('removes a note from the list and reports when it was already unavailable', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/notas');
+    httpTesting.expectOne('http://localhost:5146/notas').flush([
+      {
+        id: 'note-id',
+        titulo: 'Nota removida externamente',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir nota Nota removida externamente"]')
+      ?.click();
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('[role="alertdialog"] button:last-child')
+      ?.click();
+    httpTesting.expectOne('http://localhost:5146/notas/note-id').flush(
+      {},
+      { status: 404, statusText: 'Not Found' },
+    );
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(harness.routeNativeElement?.textContent).toContain('não está mais disponível');
+    expect(harness.routeNativeElement?.textContent).toContain('A lista foi atualizada');
+    expect(harness.routeNativeElement?.textContent).toContain('Nenhuma nota cadastrada');
+  });
+
+  it('keeps the confirmation open after a network failure and allows retrying', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/notas');
+    httpTesting.expectOne('http://localhost:5146/notas').flush([
+      {
+        id: 'note-id',
+        titulo: 'Nota para tentar novamente',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir nota Nota para tentar novamente"]')
+      ?.click();
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('[role="alertdialog"] button:last-child')
+      ?.click();
+    httpTesting
+      .expectOne('http://localhost:5146/notas/note-id')
+      .error(new ProgressEvent('error'));
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.querySelector('[role="alertdialog"]')).not.toBeNull();
+    expect(harness.routeNativeElement?.textContent).toContain(
+      'Verifique sua conexão e tente novamente.',
+    );
+    expect(harness.routeNativeElement?.textContent).toContain('Nota para tentar novamente');
+
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('[role="alertdialog"] button:last-child')
+      ?.click();
+    const retry = httpTesting.expectOne('http://localhost:5146/notas/note-id');
+    retry.flush(null, { status: 204, statusText: 'No Content' });
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(harness.routeNativeElement?.textContent).toContain('Nenhuma nota cadastrada');
+  });
+
+  it('keeps the confirmation open with a friendly message after an unexpected error', async () => {
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/app/notas');
+    httpTesting.expectOne('http://localhost:5146/notas').flush([
+      {
+        id: 'note-id',
+        titulo: 'Nota para manter',
+        descricao: null,
+        status: 'Ativa',
+        categorias: [],
+        criadoEm: '2026-10-28T15:00:00Z',
+        atualizadoEm: '2026-10-28T16:00:00Z',
+      },
+    ]);
+    harness.detectChanges();
+
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('button[aria-label="Excluir nota Nota para manter"]')
+      ?.click();
+    harness.detectChanges();
+    harness.routeNativeElement
+      ?.querySelector<HTMLButtonElement>('[role="alertdialog"] button:last-child')
+      ?.click();
+    httpTesting.expectOne('http://localhost:5146/notas/note-id').flush(
+      { detail: 'internal details' },
+      { status: 500, statusText: 'Internal Server Error' },
+    );
+    harness.detectChanges();
+
+    expect(harness.routeNativeElement?.querySelector('[role="alertdialog"]')).not.toBeNull();
+    expect(harness.routeNativeElement?.textContent).toContain(
+      'Ocorreu um erro ao excluir a nota. Tente novamente.',
+    );
+    expect(harness.routeNativeElement?.textContent).not.toContain('internal details');
+    expect(harness.routeNativeElement?.textContent).toContain('Nota para manter');
+  });
+
   it.each([
     { initialStatus: 'Ativa', newStatus: 'Arquivada', action: 'Arquivar' },
     { initialStatus: 'Arquivada', newStatus: 'Ativa', action: 'Reativar' },
